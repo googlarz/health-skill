@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Health Skill">
+  <rect width="256" height="256" rx="48" fill="#0F766E"/>
+  <circle cx="128" cy="128" r="80" fill="#115E59"/>
+  <path d="M70 130h34l16-42 24 84 18-42h24" fill="none" stroke="#F0FDFA" stroke-linecap="round" stroke-linejoin="round" stroke-width="14"/>
+</svg>
