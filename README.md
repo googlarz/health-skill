@@ -12,6 +12,47 @@ It is built for people who want something practical:
 - safer document organization
 - less repeating the same health story over and over
 
+## At A Glance
+
+- One person = one folder
+- Claude reads the folder, not just the chat history
+- New files go into `inbox/` and move to `Archive/` after processing
+- The workspace keeps summaries, review queues, trends, and visit prep up to date
+- Best used in Claude Cowork with `Use existing folder`
+
+## Why This Exists
+
+Most health-related AI use falls apart in the real world for one simple reason: continuity.
+
+You upload a PDF, ask a few questions, get an answer, and then everything important disappears into chat history.
+
+Health Skill is meant to solve that. It gives Claude a durable workspace so future sessions can start from:
+
+- current conditions
+- current medications
+- recent labs
+- pending follow-ups
+- unresolved questions
+- caregiver context
+
+That makes it much more useful for real family health management than a one-off “health chat.”
+
+## Why I Built It
+
+I am building Health Skill for real family use, not as a demo.
+
+I wanted something more durable than ad hoc chats, scattered PDFs, and vague memory. I wanted a system where Claude could come back to the same folder weeks later and still understand the person, the recent labs, the current meds, the next appointment, and the unresolved questions.
+
+That is why this project is local-first, file-based, and opinionated about continuity.
+
+It is designed for people like me who want:
+
+- one folder per person
+- a calm health home screen
+- better appointment preparation
+- a caregiver-friendly workflow
+- less chaos around family health admin
+
 ## Why It Feels Different
 
 Most health AI tools are chat-first and memory-light. Health Skill is folder-first and continuity-first.
@@ -37,6 +78,17 @@ This project is a local skill plus a workspace toolkit.
 
 This is designed for Claude Cowork and the "Use existing folder" workflow.
 
+## What You Get
+
+Health Skill gives you both a workflow and a set of outputs that stay useful over time:
+
+- `HEALTH_HOME.md` for the calm all-in-one overview
+- `TODAY.md` for the smallest useful next actions
+- `NEXT_APPOINTMENT.md` for visit prep
+- `REVIEW_WORKLIST.md` for trust-aware extracted facts
+- `HEALTH_PROFILE.json` for structured continuity
+- `HEALTH_TIMELINE.md` and trend files for longer-term context
+
 ## Who This Is For
 
 Health Skill is especially useful if you:
@@ -46,6 +98,62 @@ Health Skill is especially useful if you:
 - want one folder per person instead of scattered notes and chat history
 - want Claude to be useful across months, not just one conversation
 - care more about organization and continuity than about flashy app UX
+
+## A Real Project Instruction Example
+
+One of the best ways to use Health Skill is to layer project-specific rules on top of it.
+
+For example, this is the kind of Claude project instruction that can sit above the skill in a real family workspace:
+
+```md
+Use /health-skill
+
+## Project Context
+
+This is a family health management workspace. There are multiple person folders under `Health/`.
+
+Examples:
+- `Health/Person-A/`
+- `Health/Person-B/`
+- `Health/Person-C/`
+- `Health/Person-D/`
+
+Each person folder contains:
+- HEALTH_PROFILE.md — structured health summary
+- Lab result summaries (dated markdown files)
+- Originals/ — source documents
+- Clinic briefs and special reports as needed
+
+## Default Behaviors
+
+1. Always ask which person the request is about before starting any health task, unless the message makes it obvious.
+2. Read HEALTH_PROFILE.md first before answering any health question about a person — it is the source of truth for current conditions, medications, and allergies.
+3. Follow the health-skill protocol for all health-related tasks: triage, lab explanation, visit prep, medication review, document ingestion.
+4. Save outputs to the correct person folder — never mix files between people.
+5. Use the family or clinician-facing language expected in the workspace. Use English for internal workspace files unless asked otherwise.
+6. Emergency rule is absolute — if any message contains urgent symptoms, lead with the escalation recommendation before anything else.
+
+## Workspace Maintenance
+
+- When new lab results or documents are added to a person's folder, process them and update HEALTH_PROFILE.md.
+- Keep lab summaries dated (YYYY-MM-DD format).
+- For cross-person comparisons or caregiver overview, reference the `Health/` root level.
+- Archive original source documents in each person's Originals/ folder.
+
+## What This Project Is NOT For
+
+- Diagnosis or prescribing
+- Emergency dispatch (call 112/999/911 instead)
+- Replacing clinician judgment
+```
+
+That is a good example of the intended model:
+
+- the skill gives you a strong reusable health workflow
+- the project instruction adds workspace-specific rules
+- the folders provide continuity across time
+
+If your workspace already uses conventions like `HEALTH_PROFILE.md` or `Originals/`, that is fine. The skill works best when the project instruction clearly declares those conventions so Claude follows them consistently.
 
 ## 5-Minute Setup For Non-Technical Users
 
@@ -465,4 +573,4 @@ If you only read one thing after cloning the repo, read:
 
 ## License / Usage
 
-Add the license you want before publishing publicly. If you plan to share this widely, that should be explicit in the repository before release.
+This repository is released under the [MIT License](./LICENSE).
