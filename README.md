@@ -2,7 +2,7 @@
 
 Local-first health organization and care-navigation skill for Claude Cowork.
 
-Health Skill turns a normal folder into a durable health workspace for one person. It helps Claude organize records, explain labs in context, prepare for appointments, track follow-ups, and keep a structured memory across sessions without depending on a cloud health platform.
+Health Skill turns normal folders into durable health workspaces for one person or an entire family. It helps Claude organize records, explain labs in context, prepare for appointments, track follow-ups, and keep a structured memory across sessions without depending on a cloud health platform.
 
 It is built for people who want something practical:
 
