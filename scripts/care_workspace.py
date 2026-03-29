@@ -127,6 +127,10 @@ def home_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "HEALTH_HOME.md"
 
 
+def patterns_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "HEALTH_PATTERNS.md"
+
+
 def weight_trends_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "WEIGHT_TRENDS.md"
 
@@ -319,6 +323,9 @@ def ensure_person(
 
     if not home_path(root, person_id).exists():
         atomic_write_text(home_path(root, person_id), "# Health Home\n\nNot rendered yet.\n")
+
+    if not patterns_path(root, person_id).exists():
+        atomic_write_text(patterns_path(root, person_id), "# Health Patterns\n\nNot rendered yet.\n")
 
     if not weight_trends_path(root, person_id).exists():
         atomic_write_text(weight_trends_path(root, person_id), "# Weight Trends\n\nNo weight entries yet.\n")
@@ -1677,6 +1684,134 @@ TREND_THRESHOLDS = {
 }
 
 
+def parse_blood_pressure(value_text: str) -> tuple[int | None, int | None]:
+    match = re.match(r"^\s*(\d{2,3})\s*/\s*(\d{2,3})\s*$", str(value_text))
+    if not match:
+        return None, None
+    return int(match.group(1)), int(match.group(2))
+
+
+def latest_medication_change(medication_history: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not medication_history:
+        return None
+    return sorted(medication_history, key=lambda item: item.get("recorded_at", ""))[-1]
+
+
+def build_pattern_insights(
+    profile: dict[str, Any],
+    medication_history: list[dict[str, Any]],
+    weight_entries: list[dict[str, Any]],
+    vital_entries: list[dict[str, Any]],
+) -> list[str]:
+    insights: list[str] = []
+
+    grouped_tests: dict[str, list[dict[str, Any]]] = {}
+    for item in profile.get("recent_tests", []):
+        value = parse_numeric_value(item.get("value"))
+        if value is None:
+            continue
+        name = normalize_test_name(str(item.get("name", "")))
+        grouped_tests.setdefault(name, []).append(item)
+
+    for name in sorted(grouped_tests):
+        series = sorted(grouped_tests[name], key=lambda item: item.get("date", ""))
+        if len(series) < 2:
+            continue
+        first = parse_numeric_value(series[0].get("value"))
+        latest = parse_numeric_value(series[-1].get("value"))
+        if first is None or latest is None:
+            continue
+        delta = latest - first
+        threshold = TREND_THRESHOLDS.get(name, 0.0)
+        if threshold and abs(delta) >= threshold:
+            direction = "up" if delta > 0 else "down"
+            insights.append(
+                f"{name} has moved {direction} by {abs(delta):.2f} {series[-1].get('unit', '')} across the recorded series."
+            )
+        abnormal_count = sum(1 for item in series if item.get("flag") in {"high", "low", "abnormal"})
+        if abnormal_count >= 2:
+            insights.append(
+                f"{name} has been flagged abnormal on multiple recorded dates, which suggests a repeat pattern rather than a one-off result."
+            )
+
+    if len(weight_entries) >= 2:
+        first = weight_entries[0]["value"]
+        latest = weight_entries[-1]["value"]
+        if first:
+            change_pct = ((latest - first) / first) * 100
+            if abs(change_pct) >= 5:
+                insights.append(
+                    f"Weight changed by {change_pct:+.1f}% between the first and latest recorded entries."
+                )
+
+    bp_entries = [item for item in vital_entries if item.get("metric") == "blood_pressure"]
+    elevated_bp = 0
+    for item in bp_entries:
+        systolic, diastolic = parse_blood_pressure(str(item.get("value_text", "")))
+        if systolic is None:
+            continue
+        if systolic >= 130 or diastolic >= 80:
+            elevated_bp += 1
+    if elevated_bp >= 2:
+        insights.append(
+            f"Blood pressure has been elevated in {elevated_bp} recorded entries, which may be worth discussing as a repeated pattern."
+        )
+
+    med_change = latest_medication_change(medication_history)
+    if med_change:
+        change_time = parse_date_like(str(med_change.get("recorded_at", "")))
+        if change_time:
+            nearby_abnormal = [
+                item
+                for item in profile.get("recent_tests", [])
+                if item.get("flag") in {"high", "low", "abnormal"}
+                and (test_time := parse_date_like(str(item.get("date", ""))))
+                and 0 <= (test_time - change_time).days <= 45
+            ]
+            if nearby_abnormal:
+                insights.append(
+                    f"There are abnormal labs recorded within about 45 days after the medication change to {med_change.get('medication_name')}, so that timing may be worth reviewing."
+                )
+
+    overdue = [
+        item
+        for item in profile.get("follow_up", [])
+        if item.get("status") != "done"
+        and item.get("due_date")
+        and item.get("due_date") < date.today().isoformat()
+    ]
+    if overdue and recent_abnormal_tests(profile, limit=10):
+        insights.append(
+            f"There are both abnormal findings and overdue follow-ups on record, which suggests the issue may be lingering without a closed loop."
+        )
+
+    deduped: list[str] = []
+    for item in insights:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped[:8]
+
+
+def render_patterns_text(
+    profile: dict[str, Any],
+    medication_history: list[dict[str, Any]],
+    weight_entries: list[dict[str, Any]],
+    vital_entries: list[dict[str, Any]],
+) -> str:
+    insights = build_pattern_insights(profile, medication_history, weight_entries, vital_entries)
+    lines = ["# Health Patterns", ""]
+    if not insights:
+        lines.append("No cross-record patterns are clear yet. Add more history, labs, vitals, or medication changes to make this view more useful.")
+        lines.append("")
+        return "\n".join(lines)
+    lines.append("These are practical cross-record connections surfaced from the current workspace history.")
+    lines.append("")
+    lines.append("## Pattern Signals")
+    lines.extend(f"- {item}" for item in insights)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def render_trends_text(profile: dict[str, Any]) -> str:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for item in profile.get("recent_tests", []):
@@ -1985,6 +2120,7 @@ def render_change_report_text(
     recent_med_history = [item for item in medication_history if is_recent(item.get("recorded_at", ""))]
     recent_weights = [item for item in weight_entries if is_recent(item.get("entry_date", ""))]
     recent_vitals = [item for item in vital_entries if is_recent(item.get("entry_date", ""))]
+    pattern_insights = build_pattern_insights(profile, medication_history, weight_entries, vital_entries)
 
     lines = [
         "# Health Change Report",
@@ -2048,6 +2184,11 @@ def render_change_report_text(
         )
     else:
         lines.append("- none recorded")
+    lines.extend(["", "## Cross-Record Connections"])
+    if pattern_insights:
+        lines.extend(f"- {item}" for item in pattern_insights[:4])
+    else:
+        lines.append("- none recorded")
     lines.append("")
     return "\n".join(lines)
 
@@ -2088,8 +2229,10 @@ def render_health_home_text(
     review_queue: list[dict[str, Any]],
     weight_entries: list[dict[str, Any]],
     vital_entries: list[dict[str, Any]],
+    medication_history: list[dict[str, Any]],
 ) -> str:
     next_item = next_follow_up(profile)
+    pattern_insights = build_pattern_insights(profile, medication_history, weight_entries, vital_entries)
     lines = [
         "# Health Home",
         "",
@@ -2119,6 +2262,11 @@ def render_health_home_text(
         )
     else:
         lines.append("- No abnormal lab flags are currently highlighted.")
+    lines.extend(["", "## Connected Patterns"])
+    if pattern_insights:
+        lines.extend(f"- {item}" for item in pattern_insights[:4])
+    else:
+        lines.append("- No strong cross-record patterns are obvious yet.")
     lines.extend(["", "## Progress"])
     lines.extend(f"- {item}" for item in care_success_markers(profile, conflicts, inbox_files, review_queue))
     lines.extend(["", "## Metrics Being Tracked"])
@@ -2318,8 +2466,12 @@ def render_next_appointment_text(
     profile: dict[str, Any],
     conflicts: list[dict[str, Any]],
     review_queue: list[dict[str, Any]],
+    medication_history: list[dict[str, Any]],
+    weight_entries: list[dict[str, Any]],
+    vital_entries: list[dict[str, Any]],
 ) -> str:
     next_item = next_follow_up(profile)
+    pattern_insights = build_pattern_insights(profile, medication_history, weight_entries, vital_entries)
     lines = [
         "# Next Appointment",
         "",
@@ -2379,6 +2531,11 @@ def render_next_appointment_text(
     if not recent_changes:
         recent_changes.append("No major recent record changes are flagged.")
     lines.extend(f"- {item}" for item in recent_changes)
+    lines.extend(["", "## Pattern Connections Worth Mentioning"])
+    if pattern_insights:
+        lines.extend(f"- {item}" for item in pattern_insights[:4])
+    else:
+        lines.append("- No strong cross-record patterns are obvious yet.")
     lines.extend(["", "## Best Questions To Ask"])
     lines.extend(f"- {item}" for item in suggested_visit_questions(profile))
     lines.append("")
@@ -2759,7 +2916,15 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
     atomic_write_text(summary_path(root, person_id), summary)
     atomic_write_text(
         home_path(root, person_id),
-        render_health_home_text(profile, conflicts, inbox_files, review_queue, weight_entries, vital_entries),
+        render_health_home_text(
+            profile,
+            conflicts,
+            inbox_files,
+            review_queue,
+            weight_entries,
+            vital_entries,
+            medication_history,
+        ),
     )
     atomic_write_text(start_here_path(root, person_id), render_start_here_text(profile))
     atomic_write_text(
@@ -2772,7 +2937,14 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
     )
     atomic_write_text(
         next_appointment_path(root, person_id),
-        render_next_appointment_text(profile, conflicts, review_queue),
+        render_next_appointment_text(
+            profile,
+            conflicts,
+            review_queue,
+            medication_history,
+            weight_entries,
+            vital_entries,
+        ),
     )
     atomic_write_text(
         review_worklist_path(root, person_id),
@@ -2793,6 +2965,10 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
     )
     atomic_write_text(dossier_path(root, person_id), dossier)
     atomic_write_text(trends_path(root, person_id), render_trends_text(profile))
+    atomic_write_text(
+        patterns_path(root, person_id),
+        render_patterns_text(profile, medication_history, weight_entries, vital_entries),
+    )
     atomic_write_text(weight_trends_path(root, person_id), render_weight_trends_text(weight_entries))
     atomic_write_text(vitals_trends_path(root, person_id), render_vitals_trends_text(vital_entries))
     atomic_write_text(
@@ -3193,6 +3369,15 @@ def command_render_next_appointment(args: argparse.Namespace) -> int:
         ensure_person(root, args.person_id)
         refresh_views(root, args.person_id)
     print(next_appointment_path(root, args.person_id))
+    return 0
+
+
+def command_render_patterns(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    with workspace_lock(root, args.person_id):
+        ensure_person(root, args.person_id)
+        refresh_views(root, args.person_id)
+    print(patterns_path(root, args.person_id))
     return 0
 
 
@@ -3688,6 +3873,11 @@ def build_parser() -> argparse.ArgumentParser:
     render_next_appointment.add_argument("--root", required=True)
     render_next_appointment.add_argument("--person-id", default="")
     render_next_appointment.set_defaults(func=command_render_next_appointment)
+
+    render_patterns = subparsers.add_parser("render-patterns")
+    render_patterns.add_argument("--root", required=True)
+    render_patterns.add_argument("--person-id", default="")
+    render_patterns.set_defaults(func=command_render_patterns)
 
     render_review_worklist = subparsers.add_parser("render-review-worklist")
     render_review_worklist.add_argument("--root", required=True)

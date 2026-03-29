@@ -19,6 +19,7 @@ from scripts.care_workspace import (
     intake_summary_path,
     load_vital_entries,
     next_appointment_path,
+    patterns_path,
     load_conflicts,
     load_medication_history,
     load_profile,
@@ -87,6 +88,7 @@ class CareWorkspaceTests(unittest.TestCase):
 
         self.assertTrue((self.root / "HEALTH_PROFILE.json").exists())
         self.assertTrue((self.root / "HEALTH_HOME.md").exists())
+        self.assertTrue((self.root / "HEALTH_PATTERNS.md").exists())
         self.assertTrue((self.root / "HEALTH_SUMMARY.md").exists())
         self.assertTrue((self.root / "HEALTH_DOSSIER.md").exists())
         self.assertTrue((self.root / "HEALTH_CONFLICTS.json").exists())
@@ -224,6 +226,7 @@ class CareWorkspaceTests(unittest.TestCase):
         self.assertTrue(summary_path(self.root, "").exists())
         self.assertTrue(dossier_path(self.root, "").exists())
         self.assertTrue(home_path(self.root, "").exists())
+        self.assertTrue(patterns_path(self.root, "").exists())
         self.assertTrue(start_here_path(self.root, "").exists())
         self.assertTrue(today_path(self.root, "").exists())
         self.assertTrue(this_week_path(self.root, "").exists())
@@ -396,6 +399,7 @@ class CareWorkspaceTests(unittest.TestCase):
         self.assertIn("follow_up", timeline)
         self.assertIn("Weight Changes", report)
         self.assertIn("Other Vital Changes", report)
+        self.assertIn("Cross-Record Connections", report)
 
     def test_user_facing_views_include_priorities_and_review_guidance(self) -> None:
         ensure_person(self.root, "", "Jane Doe")
@@ -405,11 +409,14 @@ class CareWorkspaceTests(unittest.TestCase):
         refresh_views(self.root, "")
 
         home_text = home_path(self.root, "").read_text(encoding="utf-8")
+        patterns_text = patterns_path(self.root, "").read_text(encoding="utf-8")
         today_text = today_path(self.root, "").read_text(encoding="utf-8")
         review_text = review_worklist_path(self.root, "").read_text(encoding="utf-8")
         status_text = care_status_path(self.root, "").read_text(encoding="utf-8")
 
         self.assertIn("Health Home", home_text)
+        self.assertIn("Connected Patterns", home_text)
+        self.assertIn("Health Patterns", patterns_text)
         self.assertIn("Focus Now", today_text)
         self.assertIn("Probably Safe To Accept", review_text)
         self.assertIn("Care Status", status_text)
@@ -435,11 +442,14 @@ class CareWorkspaceTests(unittest.TestCase):
 
         appointment_text = next_appointment_path(self.root, "").read_text(encoding="utf-8")
         dossier_text = dossier_path(self.root, "").read_text(encoding="utf-8")
+        patterns_text = patterns_path(self.root, "").read_text(encoding="utf-8")
 
         self.assertIn("30-Second Summary", appointment_text)
         self.assertIn("Short Portal Message Draft", appointment_text)
+        self.assertIn("Pattern Connections Worth Mentioning", appointment_text)
         self.assertIn("Best Questions To Ask", appointment_text)
         self.assertIn("Primary caregiver: Sam Doe", dossier_text)
+        self.assertIn("Health Patterns", patterns_text)
 
     def test_vitals_and_exports_work(self) -> None:
         ensure_person(self.root, "", "Jane Doe")
@@ -495,6 +505,38 @@ class CareWorkspaceTests(unittest.TestCase):
 
         self.assertIn("Caregiver Handoff", handoff)
         self.assertIn("Sam Doe", handoff)
+
+    def test_patterns_surface_repeated_findings_and_timing(self) -> None:
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(
+            self.root,
+            "",
+            "recent_tests",
+            {"name": "LDL", "value": "160", "unit": "mg/dL", "date": "2026-03-01", "flag": "high"},
+        )
+        upsert_record(
+            self.root,
+            "",
+            "recent_tests",
+            {"name": "LDL", "value": "180", "unit": "mg/dL", "date": "2026-03-20", "flag": "high"},
+        )
+        upsert_record(
+            self.root,
+            "",
+            "medications",
+            {"name": "atorvastatin", "dose": "20 mg nightly", "status": "active"},
+        )
+        record_vital(self.root, "", "2026-03-05", "blood_pressure", "132/84", "mmHg", "home cuff")
+        record_vital(self.root, "", "2026-03-12", "blood_pressure", "136/86", "mmHg", "home cuff")
+        refresh_views(self.root, "")
+
+        patterns_text = patterns_path(self.root, "").read_text(encoding="utf-8")
+        home_text = home_path(self.root, "").read_text(encoding="utf-8")
+
+        self.assertIn("LDL has moved", patterns_text)
+        self.assertIn("flagged abnormal on multiple recorded dates", patterns_text)
+        self.assertIn("Blood pressure has been elevated", patterns_text)
+        self.assertIn("Connected Patterns", home_text)
 
 
 if __name__ == "__main__":

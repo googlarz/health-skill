@@ -4,13 +4,18 @@ Local-first health organization and care-navigation skill for Claude Cowork.
 
 Health Skill turns normal folders into durable health workspaces for one person or an entire family. It helps Claude organize records, explain labs in context, prepare for appointments, track follow-ups, and keep a structured memory across sessions without depending on a cloud health platform.
 
+The biggest benefit is not just storage. It is connection.
+
+Health Skill brings together the health information you already have about yourself or your loved ones — labs, notes, medications, follow-ups, symptoms, documents, and visit history — and gives Claude a durable context it can actually reason over. That makes it much easier to spot patterns, connect changes over time, see what happened before and after a medication or visit, and prepare better questions for the next clinician conversation.
+
 It is built for people who want something practical:
 
 - a folder they control
 - continuity across Claude sessions
 - better appointment prep
-- safer document organization
-- less repeating the same health story over and over
+- connected data instead of scattered records
+- clearer patterns across labs, notes, medications, and visits
+- durable history Claude can actually work from over time
 
 ## At A Glance
 
@@ -36,6 +41,8 @@ Health Skill is meant to solve that. It gives Claude a durable workspace so futu
 - caregiver context
 
 That makes it much more useful for real family health management than a one-off “health chat.”
+
+Just as important, it lets Claude work across the full picture instead of isolated fragments. A single lab result is one thing. A lab result connected to past labs, medication changes, clinician notes, symptoms, and follow-up plans is much more useful. That is the core value of the project.
 
 ## Why I Built It
 
@@ -88,6 +95,14 @@ Health Skill gives you both a workflow and a set of outputs that stay useful ove
 - `REVIEW_WORKLIST.md` for trust-aware extracted facts
 - `HEALTH_PROFILE.json` for structured continuity
 - `HEALTH_TIMELINE.md` and trend files for longer-term context
+
+In practice, that means Claude can help with questions like:
+
+- What changed in the last 3 months?
+- Did this issue start before or after a medication change?
+- Which labs keep moving in the wrong direction?
+- What should we bring up at the next visit?
+- What details matter across the whole family, not just one document?
 
 ## Who This Is For
 

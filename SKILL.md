@@ -140,6 +140,7 @@ For most requests, use this sequence:
 - Store longitudinal weight entries in `health_metrics.db` and regenerate `WEIGHT_TRENDS.md`.
 - Store non-weight vitals in `health_metrics.db` and regenerate `VITALS_TRENDS.md`.
 - Keep a unified event view in `HEALTH_TIMELINE.md` and a recent-delta view in `HEALTH_CHANGE_REPORT.md`.
+- Use `HEALTH_PATTERNS.md` to surface practical cross-record connections such as repeated abnormal labs, meaningful trend changes, weight or blood pressure shifts, and timing around medication changes.
 - Track user workflow preferences in `HEALTH_PROFILE.json.preferences` and surface them in the dossier.
 - Keep `ASSISTANT_UPDATE.md` conversational so Claude Cowork leaves a clear “what I just did” note after meaningful workspace actions.
 
