@@ -1,10 +1,12 @@
 # Health Skill
 
-Local-first health organization and care-navigation skill for Claude Cowork.
+Local-first health organization and care-navigation skill designed to work best inside a Claude Cowork project.
 
 Health Skill turns normal folders into durable health workspaces for one person or an entire family. It helps Claude organize records, explain labs in context, prepare for appointments, track follow-ups, and keep a structured memory across sessions without depending on a cloud health platform.
 
-The biggest benefit is not just storage. It is connection.
+The recommended setup is simple: one person per folder, opened in Claude Cowork with `Use existing folder`.
+
+The biggest benefit is not just storage. It is continuity plus connection.
 
 Health Skill brings together the health information you already have about yourself or your loved ones — labs, notes, medications, follow-ups, symptoms, documents, and visit history — and gives Claude a durable context it can actually reason over. That makes it much easier to spot patterns, connect changes over time, see what happened before and after a medication or visit, and prepare better questions for the next clinician conversation.
 
@@ -19,11 +21,12 @@ It is built for people who want something practical:
 
 ## At A Glance
 
+- Best used in a Claude Cowork project
 - One person = one folder
 - Claude reads the folder, not just the chat history
 - New files go into `inbox/` and move to `Archive/` after processing
 - The workspace keeps summaries, review queues, trends, and visit prep up to date
-- Best used in Claude Cowork with `Use existing folder`
+- The main benefit is continuity across sessions and pattern detection across the full record
 
 ## Why This Exists
 
@@ -42,7 +45,7 @@ Health Skill is meant to solve that. It gives Claude a durable workspace so futu
 
 That makes it much more useful for real family health management than a one-off “health chat.”
 
-Just as important, it lets Claude work across the full picture instead of isolated fragments. A single lab result is one thing. A lab result connected to past labs, medication changes, clinician notes, symptoms, and follow-up plans is much more useful. That is the core value of the project.
+Just as important, it lets Claude work across the full picture instead of isolated fragments. A single lab result is one thing. A lab result connected to past labs, medication changes, clinician notes, symptoms, and follow-up plans is much more useful. That is where continuity turns into useful pattern recognition, and that is the core value of the project.
 
 ## Why I Built It
 
@@ -83,7 +86,7 @@ This project is a local skill plus a workspace toolkit.
 - Claude keeps a structured record plus human-friendly views up to date
 - The folder becomes the long-term memory, not the chat thread
 
-This is designed for Claude Cowork and the "Use existing folder" workflow.
+This is designed for Claude Cowork and the `Use existing folder` workflow. The default and recommended model is one person per folder for clarity, continuity, and cleaner organization.
 
 ## What You Get
 
