@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "health-skill"
+version = "0.1.0"
+description = "Local-first health organization and care-navigation skill for Claude"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+pdf = ["pdfplumber>=0.10", "pypdf>=4.0"]
+ocr = ["Pillow>=10.0"]
+all = ["pdfplumber>=0.10", "pypdf>=4.0", "Pillow>=10.0"]
+dev = ["mypy>=1.10", "pdfplumber>=0.10", "pypdf>=4.0", "Pillow>=10.0"]
+
+[project.scripts]
+care-workspace = "scripts.care_workspace:main"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.setuptools.packages.find]
+include = ["scripts*"]

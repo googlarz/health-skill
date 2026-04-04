@@ -1,4 +1,31 @@
 __pycache__/
 *.pyc
+*.pyo
 .DS_Store
 *.zip
+
+# SQLite databases (generated per person folder)
+*.db
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# mypy
+.mypy_cache/

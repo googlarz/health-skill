@@ -80,7 +80,7 @@ class CareWorkspaceTests(unittest.TestCase):
 
         reloaded = load_profile(self.root, "jane-doe")
         self.assertEqual(reloaded["conditions"][0]["name"], "Asthma")
-        self.assertEqual(reloaded["schema_version"], 3)
+        self.assertEqual(reloaded["schema_version"], 4)
 
     def test_project_root_mode_creates_explicit_health_files(self) -> None:
         ensure_person(self.root, "", "Jane Doe", "1980-01-01", "female")
