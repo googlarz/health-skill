@@ -244,6 +244,10 @@ def exports_dir(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "exports"
 
 
+def dashboard_cache_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "DASHBOARD_CACHE.json"
+
+
 def reconciliation_path(root: Path, person_id: str) -> Path:
     return exports_dir(root, person_id) / "medication_reconciliation.md"
 
@@ -1126,6 +1130,150 @@ def staleness_warning(profile: dict[str, Any]) -> str | None:
     if days > STALENESS_THRESHOLD_DAYS:
         return f"The newest recorded result is {days} days old. Recent data would improve the accuracy of trends and recommendations."
     return None
+
+
+# ---------------------------------------------------------------------------
+# Dashboard cache: save/reuse query dashboards
+# ---------------------------------------------------------------------------
+
+# Maximum age in hours before a cached dashboard is considered stale.
+DASHBOARD_CACHE_MAX_AGE_HOURS = 24
+
+
+def load_dashboard_cache(root: Path, person_id: str) -> list[dict[str, Any]]:
+    path = dashboard_cache_path(root, person_id)
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_dashboard_cache(root: Path, person_id: str, cache: list[dict[str, Any]]) -> None:
+    atomic_write_text(dashboard_cache_path(root, person_id), json.dumps(cache, indent=2) + "\n")
+
+
+def _query_keywords(query: str) -> set[str]:
+    """Extract meaningful keywords from a query for similarity matching."""
+    stop_words = {
+        "a", "an", "the", "is", "are", "was", "were", "my", "me", "i",
+        "do", "does", "did", "what", "how", "when", "where", "why", "which",
+        "can", "could", "should", "would", "will", "about", "for", "to",
+        "of", "in", "on", "at", "with", "and", "or", "but", "not", "this",
+        "that", "it", "be", "have", "has", "had", "been", "from",
+    }
+    words = set(re.sub(r"[^a-z0-9 ]", " ", query.lower()).split())
+    return words - stop_words
+
+
+def query_similarity(query_a: str, query_b: str) -> float:
+    """Jaccard similarity between two queries (0.0-1.0)."""
+    kw_a = _query_keywords(query_a)
+    kw_b = _query_keywords(query_b)
+    if not kw_a or not kw_b:
+        return 0.0
+    return len(kw_a & kw_b) / len(kw_a | kw_b)
+
+
+def find_cached_dashboard(
+    root: Path,
+    person_id: str,
+    query: str,
+    intent: str,
+    similarity_threshold: float = 0.5,
+    max_age_hours: int = DASHBOARD_CACHE_MAX_AGE_HOURS,
+) -> dict[str, Any] | None:
+    """Find a cached dashboard matching this query.
+
+    Matches require:
+    1. Same intent category
+    2. Query similarity >= threshold (Jaccard on keywords)
+    3. Cache entry not older than max_age_hours
+    4. Profile hasn't been updated since the cache was generated
+    """
+    cache = load_dashboard_cache(root, person_id)
+    if not cache:
+        return None
+
+    profile = load_profile(root, person_id)
+    profile_updated = profile.get("audit", {}).get("updated_at", "")
+
+    for entry in reversed(cache):  # newest first
+        if entry.get("intent") != intent:
+            continue
+
+        # Check staleness
+        cached_at = entry.get("cached_at", "")
+        if cached_at:
+            try:
+                cached_dt = datetime.fromisoformat(cached_at)
+                age_hours = (datetime.now(timezone.utc) - cached_dt).total_seconds() / 3600
+                if age_hours > max_age_hours:
+                    continue
+            except ValueError:
+                continue
+
+        # Check if profile changed since cache was created
+        cached_profile_updated = entry.get("profile_updated_at", "")
+        if profile_updated and cached_profile_updated and profile_updated != cached_profile_updated:
+            continue
+
+        # Check similarity
+        sim = query_similarity(query, entry.get("query", ""))
+        if sim >= similarity_threshold:
+            return entry
+
+    return None
+
+
+def save_dashboard_to_cache(
+    root: Path,
+    person_id: str,
+    query: str,
+    intent: str,
+    intents_used: list[str],
+    dashboard_text: str,
+) -> None:
+    """Save a dashboard to the cache for future reuse."""
+    cache = load_dashboard_cache(root, person_id)
+
+    # Store profile's current updated_at so we can detect changes later.
+    profile = load_profile(root, person_id)
+    profile_updated_at = profile.get("audit", {}).get("updated_at", "")
+
+    entry = {
+        "query": query,
+        "intent": intent,
+        "intents_used": intents_used,
+        "cached_at": now_utc(),
+        "profile_updated_at": profile_updated_at,
+        "dashboard_text": dashboard_text,
+        "keywords": sorted(_query_keywords(query)),
+    }
+    cache.append(entry)
+
+    # Keep only the last 20 entries to prevent unbounded growth.
+    if len(cache) > 20:
+        cache = cache[-20:]
+
+    save_dashboard_cache(root, person_id, cache)
+
+
+def record_intent_usage(root: Path, person_id: str, intent: str) -> None:
+    """Track which intents the user triggers most (usage learning)."""
+    profile = load_profile(root, person_id)
+    usage = profile.get("preferences", {}).get("dashboard_intent_usage", {})
+    usage[intent] = usage.get(intent, 0) + 1
+    profile.setdefault("preferences", {})["dashboard_intent_usage"] = usage
+    save_profile(root, person_id, profile)
+
+
+def top_intents(root: Path, person_id: str, limit: int = 3) -> list[str]:
+    """Return the user's most-used dashboard intents."""
+    profile = load_profile(root, person_id)
+    usage = profile.get("preferences", {}).get("dashboard_intent_usage", {})
+    return sorted(usage, key=usage.get, reverse=True)[:limit]
 
 
 # Sentinel for project-root mode (one person = one folder).

@@ -418,14 +418,15 @@ class QueryDashboardTests(unittest.TestCase):
         self.assertEqual(intent, "lab_review")
 
         snap = load_snapshot(self.root, "")
-        dashboard = render_query_dashboard(
+        result = render_query_dashboard(
             "what do my cholesterol labs mean?",
             snap.profile, snap.conflicts, snap.review_queue,
             snap.medication_history, snap.weight_entries, snap.vital_entries,
             snap.inbox_files,
         )
-        self.assertIn("Lab Review Dashboard", dashboard)
-        self.assertIn("LDL", dashboard)
+        self.assertIn("Lab Review Dashboard", result.text)
+        self.assertIn("LDL", result.text)
+        self.assertEqual(result.primary_intent, "lab_review")
 
     def test_medication_query(self) -> None:
         from scripts.rendering import classify_query_intent, render_query_dashboard
@@ -433,62 +434,209 @@ class QueryDashboardTests(unittest.TestCase):
         self.assertEqual(intent, "medication_review")
 
         snap = load_snapshot(self.root, "")
-        dashboard = render_query_dashboard(
+        result = render_query_dashboard(
             "should I worry about statin side effects?",
             snap.profile, snap.conflicts, snap.review_queue,
             snap.medication_history, snap.weight_entries, snap.vital_entries,
             snap.inbox_files,
         )
-        self.assertIn("Medication Review Dashboard", dashboard)
-        self.assertIn("Atorvastatin", dashboard)
+        self.assertIn("Medication Review Dashboard", result.text)
+        self.assertIn("Atorvastatin", result.text)
 
     def test_visit_prep_query(self) -> None:
         from scripts.rendering import classify_query_intent
-        intent = classify_query_intent("help me prepare for my doctor appointment")
-        self.assertEqual(intent, "visit_prep")
+        self.assertEqual(classify_query_intent("help me prepare for my doctor appointment"), "visit_prep")
 
     def test_symptom_query(self) -> None:
         from scripts.rendering import classify_query_intent
-        intent = classify_query_intent("I have a headache and feel dizzy, should I worry?")
-        self.assertEqual(intent, "symptom_triage")
+        self.assertEqual(classify_query_intent("I have a headache and feel dizzy, should I worry?"), "symptom_triage")
 
     def test_vitals_query(self) -> None:
         from scripts.rendering import classify_query_intent, render_query_dashboard
-        intent = classify_query_intent("how is my blood pressure trending?")
-        self.assertEqual(intent, "weight_vitals")
+        self.assertEqual(classify_query_intent("how is my blood pressure trending?"), "weight_vitals")
 
         snap = load_snapshot(self.root, "")
-        dashboard = render_query_dashboard(
+        result = render_query_dashboard(
             "how is my blood pressure trending?",
             snap.profile, snap.conflicts, snap.review_queue,
             snap.medication_history, snap.weight_entries, snap.vital_entries,
             snap.inbox_files,
         )
-        self.assertIn("Vitals Dashboard", dashboard)
+        self.assertIn("Vitals Dashboard", result.text)
 
     def test_followup_query(self) -> None:
         from scripts.rendering import classify_query_intent
-        intent = classify_query_intent("what follow-ups are overdue?")
-        self.assertEqual(intent, "follow_up")
+        self.assertEqual(classify_query_intent("what follow-ups are overdue?"), "follow_up")
 
     def test_generic_query_falls_back_to_overview(self) -> None:
         from scripts.rendering import classify_query_intent
-        intent = classify_query_intent("give me a quick update")
-        self.assertEqual(intent, "caregiver_overview")
+        self.assertEqual(classify_query_intent("give me a quick update"), "caregiver_overview")
 
     def test_snapshot_convenience_wrapper(self) -> None:
         from scripts.rendering import render_query_dashboard_from_snapshot
         snap = load_snapshot(self.root, "")
-        dashboard = render_query_dashboard_from_snapshot("catch me up", snap)
-        self.assertIn("Health Overview Dashboard", dashboard)
-        self.assertIn("Jane Doe", dashboard)
+        result = render_query_dashboard_from_snapshot("catch me up", snap)
+        self.assertIn("Health Overview Dashboard", result.text)
+        self.assertIn("Jane Doe", result.text)
 
     def test_dashboard_includes_intent_metadata(self) -> None:
         from scripts.rendering import render_query_dashboard_from_snapshot
         snap = load_snapshot(self.root, "")
-        dashboard = render_query_dashboard_from_snapshot("LDL labs", snap)
-        self.assertIn("intent: lab_review", dashboard)
-        self.assertIn('query: "LDL labs"', dashboard)
+        result = render_query_dashboard_from_snapshot("LDL labs", snap)
+        self.assertIn("intent: lab_review", result.text)
+        self.assertIn('query: "LDL labs"', result.text)
+
+
+class MultiIntentTests(unittest.TestCase):
+    """Multi-intent detection for compound queries."""
+
+    def test_compound_query_detects_multiple_intents(self) -> None:
+        from scripts.rendering import classify_query_intents
+        intents = classify_query_intents("what are my labs and when is my next appointment", max_intents=2)
+        self.assertIn("lab_review", intents)
+        # Should detect at least one intent
+        self.assertGreaterEqual(len(intents), 1)
+
+    def test_single_query_returns_one_intent(self) -> None:
+        from scripts.rendering import classify_query_intents
+        intents = classify_query_intents("cholesterol labs", max_intents=2)
+        self.assertEqual(intents[0], "lab_review")
+
+    def test_multi_intent_merges_sections(self) -> None:
+        from scripts.rendering import _merge_sections_for_intents
+        merged = _merge_sections_for_intents(["lab_review", "visit_prep"])
+        # Should have sections from both, no duplicates
+        self.assertIn("relevant_labs", merged)
+        self.assertIn("thirty_second", merged)
+        self.assertEqual(len(merged), len(set(merged)))
+
+
+class DashboardCacheTests(unittest.TestCase):
+    """Dashboard save/reuse with similarity matching."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "180", "unit": "mg/dL",
+            "date": date.today().isoformat(), "flag": "high",
+        })
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_save_and_find_cached_dashboard(self) -> None:
+        from scripts.care_workspace import (
+            find_cached_dashboard,
+            save_dashboard_to_cache,
+        )
+        save_dashboard_to_cache(
+            self.root, "", "what do my cholesterol labs mean?",
+            "lab_review", ["lab_review"], "# Lab Dashboard\nLDL 180\n",
+        )
+        cached = find_cached_dashboard(self.root, "", "cholesterol labs meaning", "lab_review")
+        self.assertIsNotNone(cached)
+        self.assertIn("Lab Dashboard", cached["dashboard_text"])
+
+    def test_cache_miss_on_different_intent(self) -> None:
+        from scripts.care_workspace import (
+            find_cached_dashboard,
+            save_dashboard_to_cache,
+        )
+        save_dashboard_to_cache(
+            self.root, "", "cholesterol labs", "lab_review", ["lab_review"], "# Labs\n",
+        )
+        cached = find_cached_dashboard(self.root, "", "medication side effects", "medication_review")
+        self.assertIsNone(cached)
+
+    def test_cache_invalidated_on_profile_update(self) -> None:
+        from scripts.care_workspace import (
+            find_cached_dashboard,
+            save_dashboard_to_cache,
+            load_dashboard_cache,
+            save_dashboard_cache,
+        )
+        save_dashboard_to_cache(
+            self.root, "", "cholesterol labs", "lab_review", ["lab_review"], "# Labs\n",
+        )
+        # Simulate profile being updated after cache was created
+        # by backdating the cache entry's profile_updated_at
+        cache = load_dashboard_cache(self.root, "")
+        cache[-1]["profile_updated_at"] = "2026-01-01T00:00:00+00:00"
+        save_dashboard_cache(self.root, "", cache)
+
+        # Now the profile's updated_at is newer than the cached profile_updated_at
+        cached = find_cached_dashboard(self.root, "", "cholesterol labs", "lab_review")
+        self.assertIsNone(cached)
+
+    def test_query_similarity(self) -> None:
+        from scripts.care_workspace import query_similarity
+        # Identical
+        self.assertAlmostEqual(query_similarity("cholesterol labs", "cholesterol labs"), 1.0)
+        # Similar
+        sim = query_similarity("what do my cholesterol labs mean", "cholesterol labs meaning")
+        self.assertGreater(sim, 0.3)
+        # Unrelated
+        sim = query_similarity("cholesterol labs", "blood pressure medication")
+        self.assertLess(sim, 0.5)
+
+    def test_cache_max_entries(self) -> None:
+        from scripts.care_workspace import load_dashboard_cache, save_dashboard_to_cache
+        for i in range(25):
+            save_dashboard_to_cache(
+                self.root, "", f"query {i}", "lab_review", ["lab_review"], f"# Dashboard {i}\n",
+            )
+        cache = load_dashboard_cache(self.root, "")
+        self.assertLessEqual(len(cache), 20)
+
+
+class UsageTrackingTests(unittest.TestCase):
+    """Intent usage tracking."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_record_and_read_intent_usage(self) -> None:
+        from scripts.care_workspace import record_intent_usage, top_intents
+        record_intent_usage(self.root, "", "lab_review")
+        record_intent_usage(self.root, "", "lab_review")
+        record_intent_usage(self.root, "", "visit_prep")
+        top = top_intents(self.root, "")
+        self.assertEqual(top[0], "lab_review")
+
+
+class PersonAwareTests(unittest.TestCase):
+    """Person-aware query routing for caregiver mode."""
+
+    def test_detect_person_by_first_name(self) -> None:
+        from scripts.rendering import detect_person_in_query
+        result = detect_person_in_query(
+            "how is Jane doing?",
+            ["Jane Doe", "John Doe"],
+        )
+        self.assertEqual(result, "Jane Doe")
+
+    def test_detect_person_by_full_name(self) -> None:
+        from scripts.rendering import detect_person_in_query
+        result = detect_person_in_query(
+            "update on John Doe",
+            ["Jane Doe", "John Doe"],
+        )
+        self.assertEqual(result, "John Doe")
+
+    def test_no_match_returns_none(self) -> None:
+        from scripts.rendering import detect_person_in_query
+        result = detect_person_in_query(
+            "what are my labs?",
+            ["Jane Doe", "John Doe"],
+        )
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

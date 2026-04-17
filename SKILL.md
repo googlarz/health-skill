@@ -229,7 +229,20 @@ Recommended flow:
 
 ### Query-relevant dashboard
 
-When the user asks a health question, generate a focused dashboard instead of showing the full dossier. Use `scripts/care_workspace.py query-dashboard --root . --query "user question here"`.
+When the user asks a health question, generate a focused dashboard instead of showing the full dossier.
+
+**Default behavior for Claude:** Before answering any health question in project-folder mode, run `query-dashboard` with the user's question. Read the generated `exports/QUERY_DASHBOARD.md` as your primary context, then answer from it. This gives you focused, relevant data instead of the entire dossier.
+
+```bash
+# Generate focused dashboard
+scripts/care_workspace.py query-dashboard --root . --query "what do my cholesterol labs mean?"
+
+# Generate and save for reuse on similar future queries
+scripts/care_workspace.py query-dashboard --root . --query "what do my cholesterol labs mean?" --save
+
+# Force fresh generation (skip cache)
+scripts/care_workspace.py query-dashboard --root . --query "cholesterol" --no-cache
+```
 
 The dashboard classifies the query into an intent and assembles only the relevant sections:
 
@@ -243,7 +256,30 @@ The dashboard classifies the query into an intent and assembles only the relevan
 | follow_up | "what's overdue", "next steps" | overdue items, upcoming items, inbox, review queue |
 | caregiver_overview | "catch me up", "how is she doing" | full overview with priorities, conditions, meds, patterns |
 
-Prefer this over raw file reads when the user has a specific question. The dashboard output goes to `exports/QUERY_DASHBOARD.md`.
+Compound queries like "what are my labs and when is my next appointment" are detected as multi-intent and merge sections from both.
+
+#### Save and reuse
+
+When the user asks a comprehensive question and is satisfied with the dashboard, save it with `--save`. On the next similar query:
+- The system checks for a cached dashboard with the same intent and similar keywords (Jaccard similarity >= 0.5)
+- If the profile hasn't changed since the cache was saved, it reuses the cached dashboard
+- Cached dashboards expire after 24 hours or when the profile is updated
+- The user sees a notice that a cached dashboard is being reused, with the original query
+
+Claude should suggest saving when:
+- The dashboard covers a complex topic (more than one intent)
+- The user says the dashboard is useful or complete
+- The user is preparing for an appointment (visit_prep intent)
+
+#### Usage-aware behavior
+
+The system tracks which dashboard intents the user triggers most. Claude can use `top_intents()` to know what the user cares about most and proactively generate those dashboards during `refresh_views` or session start.
+
+#### Person-aware queries (caregiver mode)
+
+When working across multiple person folders, the system can detect person names in queries like "how is Mom doing" or "update on Jane" using `detect_person_in_query()`. Claude should use this to route to the correct person folder before generating the dashboard.
+
+Prefer dashboards over raw file reads when the user has a specific question. The output goes to `exports/QUERY_DASHBOARD.md`.
 
 The dossier should stay useful for future sessions:
 

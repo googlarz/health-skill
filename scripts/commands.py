@@ -60,6 +60,9 @@ try:
         write_assistant_update,
         add_note,
         archive_old_records,
+        find_cached_dashboard,
+        record_intent_usage,
+        save_dashboard_to_cache,
     )
     from .extraction import (
         ingest_document,
@@ -92,6 +95,7 @@ try:
         render_weight_trends_text,
         render_appointment_request_text,
         render_query_dashboard,
+        classify_query_intent,
     )
 except ImportError:
     from care_workspace import (
@@ -143,6 +147,9 @@ except ImportError:
         write_assistant_update,
         add_note,
         archive_old_records,
+        find_cached_dashboard,
+        record_intent_usage,
+        save_dashboard_to_cache,
     )
     from extraction import (
         ingest_document,
@@ -913,8 +920,33 @@ def command_backup_project(args: argparse.Namespace) -> int:
 
 def command_query_dashboard(args: argparse.Namespace) -> int:
     root = Path(args.root)
+    no_cache = getattr(args, "no_cache", False)
+    save = getattr(args, "save", False)
+
     with workspace_lock(root, args.person_id):
         ensure_person(root, args.person_id)
+        intent = classify_query_intent(args.query)
+
+        # Check cache first (unless --no-cache)
+        if not no_cache:
+            cached = find_cached_dashboard(root, args.person_id, args.query, intent)
+            if cached:
+                dashboard_text = cached["dashboard_text"]
+                # Prepend cache notice
+                header = (
+                    f"> Reusing saved dashboard from "
+                    f"{cached.get('cached_at', 'unknown')[:10]} "
+                    f"(original query: \"{cached.get('query', '')}\")\n\n"
+                )
+                dashboard_text = header + dashboard_text
+                output_path = exports_dir(root, args.person_id) / "QUERY_DASHBOARD.md"
+                atomic_write_text(output_path, dashboard_text)
+                record_intent_usage(root, args.person_id, intent)
+                print(f"[cache-hit] Reused dashboard for: {cached.get('query', '')}")
+                print(output_path)
+                return 0
+
+        # Generate fresh dashboard
         profile = load_profile(root, args.person_id)
         conflicts = load_conflicts(root, args.person_id)
         review_queue = load_review_queue(root, args.person_id)
@@ -922,7 +954,7 @@ def command_query_dashboard(args: argparse.Namespace) -> int:
         weight_entries = load_weight_entries(root, args.person_id)
         vital_entries = load_vital_entries(root, args.person_id)
         inbox_files = list_inbox_files(root, args.person_id)
-        dashboard = render_query_dashboard(
+        result = render_query_dashboard(
             query=args.query,
             profile=profile,
             conflicts=conflicts,
@@ -933,7 +965,17 @@ def command_query_dashboard(args: argparse.Namespace) -> int:
             inbox_files=inbox_files,
         )
         output_path = exports_dir(root, args.person_id) / "QUERY_DASHBOARD.md"
-        atomic_write_text(output_path, dashboard)
+        atomic_write_text(output_path, result.text)
+        record_intent_usage(root, args.person_id, intent)
+
+        if save:
+            save_dashboard_to_cache(
+                root, args.person_id,
+                args.query, result.primary_intent, result.intents_used,
+                result.text,
+            )
+            print(f"[saved] Dashboard cached for reuse (intent: {result.primary_intent})")
+
     print(output_path)
     return 0
 
@@ -1269,6 +1311,8 @@ def build_parser() -> argparse.ArgumentParser:
     query_dashboard.add_argument("--root", required=True)
     query_dashboard.add_argument("--person-id", default="")
     query_dashboard.add_argument("--query", required=True, help="Natural-language question to focus the dashboard on")
+    query_dashboard.add_argument("--save", action="store_true", help="Save this dashboard for reuse on similar queries")
+    query_dashboard.add_argument("--no-cache", action="store_true", help="Skip cache lookup, always generate fresh")
     query_dashboard.set_defaults(func=command_query_dashboard)
 
     archive_old = subparsers.add_parser("archive-old-records")

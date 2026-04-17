@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import shutil
 import tempfile
@@ -2136,9 +2137,19 @@ QUERY_INTENTS: dict[str, dict[str, Any]] = {
 
 
 def classify_query_intent(query: str) -> str:
-    """Classify a user query into an intent category.
+    """Classify a user query into the single best intent category.
 
     Returns the best-matching intent key, or 'caregiver_overview' as default.
+    """
+    intents = classify_query_intents(query, max_intents=1)
+    return intents[0] if intents else "caregiver_overview"
+
+
+def classify_query_intents(query: str, max_intents: int = 2) -> list[str]:
+    """Classify a user query into one or more intent categories (multi-intent).
+
+    Returns up to max_intents matching intents, sorted by score descending.
+    Supports compound queries like "what are my labs and when is my next appointment".
     """
     query_lower = query.lower()
     scores: dict[str, int] = {}
@@ -2147,8 +2158,31 @@ def classify_query_intent(query: str) -> str:
         if score > 0:
             scores[intent_key] = score
     if not scores:
-        return "caregiver_overview"
-    return max(scores, key=scores.get)
+        return ["caregiver_overview"]
+    ranked = sorted(scores, key=scores.get, reverse=True)
+    # Only include secondary intents if they have meaningful overlap (score > 1)
+    result = [ranked[0]]
+    for intent in ranked[1:max_intents]:
+        if scores[intent] >= 2:
+            result.append(intent)
+    return result
+
+
+def detect_person_in_query(query: str, known_names: list[str]) -> str | None:
+    """Detect if a query mentions a known person name (caregiver mode).
+
+    Returns the matched person folder name, or None.
+    """
+    query_lower = query.lower()
+    for name in known_names:
+        # Match first name, full name, or folder name
+        name_lower = name.lower()
+        parts = name_lower.split()
+        if name_lower in query_lower:
+            return name
+        if parts and parts[0] in query_lower and len(parts[0]) > 2:
+            return name
+    return None
 
 
 def _render_dashboard_section(
@@ -2453,6 +2487,31 @@ def _render_dashboard_section(
     return lines
 
 
+@dataclasses.dataclass
+class DashboardResult:
+    """Result from dashboard generation, including metadata for caching."""
+
+    text: str
+    query: str
+    primary_intent: str
+    intents_used: list[str]
+    from_cache: bool = False
+    cache_query: str = ""  # original query if served from cache
+
+
+def _merge_sections_for_intents(intents: list[str]) -> list[str]:
+    """Merge section lists from multiple intents, preserving order and deduplicating."""
+    seen: set[str] = set()
+    merged: list[str] = []
+    for intent_key in intents:
+        intent_data = QUERY_INTENTS.get(intent_key, {})
+        for section in intent_data.get("sections", []):
+            if section not in seen:
+                seen.add(section)
+                merged.append(section)
+    return merged
+
+
 def render_query_dashboard(
     query: str,
     profile: dict[str, Any],
@@ -2462,24 +2521,34 @@ def render_query_dashboard(
     weight_entries: list[dict[str, Any]],
     vital_entries: list[dict[str, Any]],
     inbox_files: list[Path],
-) -> str:
+) -> DashboardResult:
     """Build a dashboard focused on the user's query.
 
-    Classifies the query into an intent (lab review, medication review,
-    visit prep, symptom triage, vitals, follow-up, or overview) and
-    assembles only the sections relevant to that intent.
+    Supports multi-intent queries (e.g., "labs and next appointment").
+    Returns a DashboardResult with text and metadata for caching.
     """
-    intent = classify_query_intent(query)
-    intent_data = QUERY_INTENTS[intent]
+    intents = classify_query_intents(query, max_intents=2)
+    primary = intents[0]
+    primary_data = QUERY_INTENTS[primary]
+
+    # Build title
+    if len(intents) > 1:
+        titles = [QUERY_INTENTS[i]["title"] for i in intents]
+        title = " + ".join(titles)
+    else:
+        title = primary_data["title"]
+
+    # Merge sections from all matched intents
+    sections = _merge_sections_for_intents(intents)
 
     lines = [
-        f"# {intent_data['title']}",
+        f"# {title}",
         "",
         f"*Focused on: {query}*",
         "",
     ]
 
-    for section in intent_data["sections"]:
+    for section in sections:
         section_lines = _render_dashboard_section(
             section,
             profile,
@@ -2496,17 +2565,23 @@ def render_query_dashboard(
     lines.extend([
         "---",
         f"*Dashboard generated {date.today().isoformat()} | "
-        f"intent: {intent} | "
+        f"intent: {'+'.join(intents)} | "
         f"query: \"{query}\"*",
         "",
     ])
-    return "\n".join(lines)
+
+    return DashboardResult(
+        text="\n".join(lines),
+        query=query,
+        primary_intent=primary,
+        intents_used=intents,
+    )
 
 
 def render_query_dashboard_from_snapshot(
     query: str,
     snap: WorkspaceSnapshot,
-) -> str:
+) -> DashboardResult:
     """Convenience wrapper that unpacks a WorkspaceSnapshot."""
     return render_query_dashboard(
         query=query,
