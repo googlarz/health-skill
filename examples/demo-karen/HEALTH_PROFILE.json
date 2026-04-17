@@ -1,0 +1,346 @@
+{
+  "schema_version": 4,
+  "person_id": "karen-mitchell",
+  "name": "Karen Mitchell",
+  "date_of_birth": "1968-05-14",
+  "sex": "female",
+  "conditions": [
+    {
+      "name": "Hyperlipidemia",
+      "status": "active",
+      "source": {
+        "type": "document",
+        "label": "PCP visit note 2025-11",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "Essential Hypertension",
+      "status": "active",
+      "source": {
+        "type": "document",
+        "label": "PCP visit note 2024-08",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "Vitamin D Deficiency",
+      "status": "stable",
+      "source": {
+        "type": "user",
+        "label": "Karen reported",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "medications": [
+    {
+      "name": "Atorvastatin",
+      "dose": "20 mg",
+      "frequency": "nightly",
+      "form": "tablet",
+      "status": "active",
+      "source": {
+        "type": "document",
+        "label": "PCP visit note 2025-11",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "Lisinopril",
+      "dose": "10 mg",
+      "frequency": "daily",
+      "form": "tablet",
+      "status": "active",
+      "source": {
+        "type": "document",
+        "label": "PCP visit note 2024-08",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "Vitamin D3",
+      "dose": "2000 IU",
+      "frequency": "daily",
+      "form": "capsule",
+      "status": "active",
+      "source": {
+        "type": "user",
+        "label": "Karen reported",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "allergies": [
+    {
+      "substance": "Sulfa drugs",
+      "reaction": "hives",
+      "severity": "moderate",
+      "severity_level": "moderate",
+      "reaction_type": "allergy",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "substance": "Shellfish",
+      "reaction": "throat swelling",
+      "severity": "severe",
+      "severity_level": "life-threatening",
+      "reaction_type": "allergy",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "clinicians": [
+    {
+      "name": "Dr. Sarah Chen",
+      "role": "Primary Care",
+      "contact": "Riverside Medical Group",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "Dr. James Park",
+      "role": "Cardiologist",
+      "contact": "Heart & Vascular Associates",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "recent_tests": [
+    {
+      "name": "LDL",
+      "value": "188",
+      "unit": "mg/dL",
+      "date": "2025-09-15",
+      "flag": "high",
+      "reference_range": "0-99 mg/dL",
+      "source": {
+        "type": "document",
+        "label": "Sep lipid panel",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "LDL",
+      "value": "162",
+      "unit": "mg/dL",
+      "date": "2025-12-10",
+      "flag": "high",
+      "reference_range": "0-99 mg/dL",
+      "source": {
+        "type": "document",
+        "label": "Dec lipid panel",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "LDL",
+      "value": "141",
+      "unit": "mg/dL",
+      "date": "2026-03-18",
+      "flag": "high",
+      "reference_range": "0-99 mg/dL",
+      "source": {
+        "type": "document",
+        "label": "Mar lipid panel",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "HDL",
+      "value": "52",
+      "unit": "mg/dL",
+      "date": "2026-03-18",
+      "flag": "normal",
+      "reference_range": "40-999 mg/dL",
+      "source": {
+        "type": "document",
+        "label": "Mar lipid panel",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "A1C",
+      "value": "5.8",
+      "unit": "%",
+      "date": "2026-03-18",
+      "flag": "normal",
+      "reference_range": "4.0-5.6 %",
+      "source": {
+        "type": "document",
+        "label": "Mar labs",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "TSH",
+      "value": "2.1",
+      "unit": "mIU/L",
+      "date": "2026-01-20",
+      "flag": "normal",
+      "reference_range": "0.4-4.0 mIU/L",
+      "source": {
+        "type": "document",
+        "label": "Jan thyroid check",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "name": "Vitamin D",
+      "value": "28",
+      "unit": "ng/mL",
+      "date": "2026-03-18",
+      "flag": "low",
+      "reference_range": "30-100 ng/mL",
+      "source": {
+        "type": "document",
+        "label": "Mar labs",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "care_goals": [],
+  "follow_up": [
+    {
+      "task": "Repeat lipid panel",
+      "due_date": "2026-06-20",
+      "status": "pending",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "task": "Cardiology follow-up with Dr. Park",
+      "due_date": "2026-05-08",
+      "status": "pending",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "task": "Recheck Vitamin D level",
+      "due_date": "2026-09-18",
+      "status": "pending",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "unresolved_questions": [
+    {
+      "text": "Should statin dose increase given LDL still above 100?",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "text": "Is the A1C of 5.8 pre-diabetic or just borderline?",
+      "source": {
+        "type": "user",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "documents": [],
+  "encounters": [
+    {
+      "date": "2025-09-15",
+      "kind": "lab",
+      "title": "Lipid panel",
+      "summary": "Initial lipid panel. LDL 188, started atorvastatin.",
+      "source": {
+        "type": "document",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "date": "2025-12-10",
+      "kind": "lab",
+      "title": "Follow-up lipid panel",
+      "summary": "LDL down to 162 on atorvastatin 10mg. Dose increased to 20mg.",
+      "source": {
+        "type": "document",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    {
+      "date": "2026-03-18",
+      "kind": "visit-note",
+      "title": "PCP annual visit",
+      "summary": "LDL 141, BP 128/80, weight 76.8kg. Continuing current plan.",
+      "source": {
+        "type": "document",
+        "label": "",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    }
+  ],
+  "preferences": {
+    "summary_style": "concise",
+    "weight_unit": "kg",
+    "primary_caregiver": "",
+    "appointment_prep_style": "guided",
+    "communication_tone": "calm",
+    "preferred_clinicians": [],
+    "pdf_page_limit": 10
+  },
+  "consents": {
+    "workspace_storage": "user_requested",
+    "minimum_necessary": true
+  },
+  "audit": {
+    "created_at": "2026-04-17T22:01:31+00:00",
+    "updated_at": "2026-04-17T22:02:14+00:00",
+    "conflicts_open": 0,
+    "review_items_open": 0
+  }
+}

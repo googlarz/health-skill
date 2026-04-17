@@ -1,0 +1,7 @@
+Referral to Cardiology
+Patient: Karen Mitchell, DOB 05/14/1968
+Reason: Lipid management optimization
+Current medications: Atorvastatin 20mg nightly, Lisinopril 10mg daily
+Recent LDL: 141 mg/dL (goal <100)
+Please evaluate for combination therapy or dose adjustment.
+Follow up with Dr. Park by 2026-05-08.

@@ -1,0 +1,22 @@
+# Health Timeline
+
+- 2025-09-15 | encounter | 2025-09-15 | lab | Lipid panel | Initial lipid panel. LDL 188, started atorvastatin.
+- 2025-12-10 | encounter | 2025-12-10 | lab | Follow-up lipid panel | LDL down to 162 on atorvastatin 10mg. Dose increased to 20mg.
+- 2026-01-05 | weight | 78.2 kg | New year baseline
+- 2026-01-10 | vital | blood_pressure | 142/88 mmHg | Home cuff, morning
+- 2026-02-01 | weight | 77.5 kg | weight entry
+- 2026-02-15 | vital | blood_pressure | 136/84 mmHg | Home cuff
+- 2026-03-01 | weight | 76.8 kg | After diet changes
+- 2026-03-18 | encounter | 2026-03-18 | visit-note | PCP annual visit | LDL 141, BP 128/80, weight 76.8kg. Continuing current plan.
+- 2026-03-20 | vital | blood_pressure | 128/80 mmHg | Home cuff
+- 2026-03-20 | vital | heart_rate | 72 bpm | Resting
+- 2026-04-01 | weight | 76.1 kg | Steady progress
+- 2026-04-10 | vital | blood_pressure | 124/78 mmHg | Home cuff, relaxed
+- 2026-04-17T22:02:14+00:00 | medication | added | Atorvastatin
+- 2026-04-17T22:02:14+00:00 | medication | added | Lisinopril
+- 2026-04-17T22:02:14+00:00 | medication | added | Vitamin D3
+- 2026-04-18 | note | Cardiology referral
+- 2026-04-18 | note | PCP visit summary
+- 2026-05-08 | follow_up | Cardiology follow-up with Dr. Park | 2026-05-08 | pending
+- 2026-06-20 | follow_up | Repeat lipid panel | 2026-06-20 | pending
+- 2026-09-18 | follow_up | Recheck Vitamin D level | 2026-09-18 | pending

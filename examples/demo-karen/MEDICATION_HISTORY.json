@@ -1,0 +1,74 @@
+[
+  {
+    "recorded_at": "2026-04-17T22:02:14+00:00",
+    "medication_name": "Atorvastatin",
+    "event_type": "added",
+    "previous": {},
+    "current": {
+      "name": "Atorvastatin",
+      "dose": "20 mg",
+      "frequency": "nightly",
+      "form": "tablet",
+      "status": "active",
+      "source": {
+        "type": "document",
+        "label": "PCP visit note 2025-11",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    "source": {
+      "type": "document",
+      "label": "PCP visit note 2025-11",
+      "date": ""
+    }
+  },
+  {
+    "recorded_at": "2026-04-17T22:02:14+00:00",
+    "medication_name": "Lisinopril",
+    "event_type": "added",
+    "previous": {},
+    "current": {
+      "name": "Lisinopril",
+      "dose": "10 mg",
+      "frequency": "daily",
+      "form": "tablet",
+      "status": "active",
+      "source": {
+        "type": "document",
+        "label": "PCP visit note 2024-08",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    "source": {
+      "type": "document",
+      "label": "PCP visit note 2024-08",
+      "date": ""
+    }
+  },
+  {
+    "recorded_at": "2026-04-17T22:02:14+00:00",
+    "medication_name": "Vitamin D3",
+    "event_type": "added",
+    "previous": {},
+    "current": {
+      "name": "Vitamin D3",
+      "dose": "2000 IU",
+      "frequency": "daily",
+      "form": "capsule",
+      "status": "active",
+      "source": {
+        "type": "user",
+        "label": "Karen reported",
+        "date": ""
+      },
+      "last_updated": "2026-04-17T22:02:14+00:00"
+    },
+    "source": {
+      "type": "user",
+      "label": "Karen reported",
+      "date": ""
+    }
+  }
+]
