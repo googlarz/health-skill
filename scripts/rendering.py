@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# NOTE: keep both import blocks in sync
 try:
     from .care_workspace import (
         RECORD_KEYS,
@@ -45,7 +46,9 @@ try:
         start_here_path,
         summary_path,
         sync_conflict_count,
+        sync_conflict_count_from,
         sync_review_count,
+        sync_review_count_from,
         this_week_path,
         timeline_path,
         today_path,
@@ -90,7 +93,9 @@ except ImportError:
         start_here_path,
         summary_path,
         sync_conflict_count,
+        sync_conflict_count_from,
         sync_review_count,
+        sync_review_count_from,
         this_week_path,
         timeline_path,
         today_path,
@@ -1960,8 +1965,8 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
     vital_entries = snap.vital_entries
     inbox_files = snap.inbox_files
 
-    sync_conflict_count(root, person_id, profile)
-    sync_review_count(root, person_id, profile)
+    sync_conflict_count_from(conflicts, profile)
+    sync_review_count_from(review_queue, profile)
     save_profile(root, person_id, profile)
 
     summary = render_summary_text(profile, conflicts, inbox_files, review_queue, weight_entries)
@@ -2047,3 +2052,469 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
     )
 
     return summary_path(root, person_id), dossier_path(root, person_id)
+
+
+# ---------------------------------------------------------------------------
+# Query-relevant dashboard (#new)
+# ---------------------------------------------------------------------------
+
+# Intent categories for classifying user queries.
+QUERY_INTENTS: dict[str, dict[str, Any]] = {
+    "lab_review": {
+        "keywords": [
+            "lab", "labs", "test", "tests", "result", "results", "blood work",
+            "bloodwork", "panel", "cbc", "lipid", "a1c", "tsh", "cholesterol",
+            "ldl", "hdl", "bun", "creatinine", "hemoglobin", "glucose",
+        ],
+        "title": "Lab Review Dashboard",
+        "sections": ["identity", "staleness", "relevant_labs", "lab_trends",
+                      "abnormal_flags", "patterns", "questions"],
+    },
+    "medication_review": {
+        "keywords": [
+            "medication", "medications", "med", "meds", "drug", "drugs",
+            "prescription", "prescriptions", "dose", "dosage", "side effect",
+            "interaction", "refill", "pharmacy", "statin", "metformin",
+            "insulin", "lisinopril",
+        ],
+        "title": "Medication Review Dashboard",
+        "sections": ["identity", "staleness", "medications", "medication_history",
+                      "medication_conflicts", "allergies", "related_labs", "questions"],
+    },
+    "visit_prep": {
+        "keywords": [
+            "appointment", "visit", "doctor", "pcp", "specialist", "telehealth",
+            "urgent care", "prepare", "prep", "bring", "ask", "questions",
+            "next visit", "upcoming",
+        ],
+        "title": "Visit Prep Dashboard",
+        "sections": ["identity", "staleness", "thirty_second", "next_followup",
+                      "medications", "relevant_labs", "recent_changes", "patterns",
+                      "portal_message", "questions"],
+    },
+    "symptom_triage": {
+        "keywords": [
+            "symptom", "symptoms", "pain", "hurts", "ache", "fever", "nausea",
+            "dizzy", "tired", "fatigue", "swelling", "rash", "breathing",
+            "cough", "headache", "worry", "worried", "should i",
+        ],
+        "title": "Symptom Context Dashboard",
+        "sections": ["identity", "staleness", "conditions", "medications",
+                      "allergies", "recent_encounters", "relevant_labs",
+                      "vitals_snapshot", "questions"],
+    },
+    "weight_vitals": {
+        "keywords": [
+            "weight", "bmi", "blood pressure", "bp", "heart rate", "pulse",
+            "glucose", "sugar", "vitals", "trend", "tracking",
+        ],
+        "title": "Vitals Dashboard",
+        "sections": ["identity", "staleness", "weight_trend", "vitals_trend",
+                      "bp_insights", "patterns", "questions"],
+    },
+    "caregiver_overview": {
+        "keywords": [
+            "overview", "summary", "status", "everything", "catch up",
+            "what's going on", "update", "how is", "caregiver",
+        ],
+        "title": "Health Overview Dashboard",
+        "sections": ["identity", "staleness", "thirty_second", "priorities",
+                      "conditions", "medications", "abnormal_flags",
+                      "next_followup", "inbox_status", "patterns", "questions"],
+    },
+    "follow_up": {
+        "keywords": [
+            "follow up", "follow-up", "followup", "overdue", "due",
+            "schedule", "next step", "pending", "todo", "action",
+        ],
+        "title": "Follow-Up Dashboard",
+        "sections": ["identity", "staleness", "overdue_items", "upcoming_items",
+                      "inbox_status", "review_queue_summary", "conflicts_summary",
+                      "questions"],
+    },
+}
+
+
+def classify_query_intent(query: str) -> str:
+    """Classify a user query into an intent category.
+
+    Returns the best-matching intent key, or 'caregiver_overview' as default.
+    """
+    query_lower = query.lower()
+    scores: dict[str, int] = {}
+    for intent_key, intent_data in QUERY_INTENTS.items():
+        score = sum(1 for kw in intent_data["keywords"] if kw in query_lower)
+        if score > 0:
+            scores[intent_key] = score
+    if not scores:
+        return "caregiver_overview"
+    return max(scores, key=scores.get)
+
+
+def _render_dashboard_section(
+    section: str,
+    profile: dict[str, Any],
+    conflicts: list[dict[str, Any]],
+    review_queue: list[dict[str, Any]],
+    medication_history: list[dict[str, Any]],
+    weight_entries: list[dict[str, Any]],
+    vital_entries: list[dict[str, Any]],
+    inbox_files: list[Path],
+    query: str = "",
+) -> list[str]:
+    """Render a single dashboard section. Returns lines."""
+    lines: list[str] = []
+
+    if section == "identity":
+        lines.extend([
+            "## Person",
+            f"- {profile.get('name') or 'unknown'}",
+            f"- DOB: {profile.get('date_of_birth') or 'unknown'} | Sex: {profile.get('sex') or 'unknown'}",
+            f"- Last updated: {profile.get('audit', {}).get('updated_at') or 'unknown'}",
+            "",
+        ])
+
+    elif section == "staleness":
+        stale = staleness_warning(profile)
+        if stale:
+            lines.extend([f"> {stale}", ""])
+
+    elif section == "thirty_second":
+        lines.extend([
+            "## At A Glance",
+            f"- {thirty_second_summary(profile, conflicts, review_queue)}",
+            "",
+        ])
+
+    elif section == "priorities":
+        lines.extend(["## Priorities"])
+        for item in current_priorities(profile, conflicts, inbox_files, review_queue):
+            lines.append(f"- {item}")
+        lines.append("")
+
+    elif section == "conditions":
+        lines.extend([
+            "## Known Conditions",
+            render_list_with_trust(profile.get("conditions", []), ("name", "status")),
+            "",
+        ])
+
+    elif section == "medications":
+        lines.extend([
+            "## Current Medications",
+            render_list_with_trust(
+                profile.get("medications", []),
+                ("name", "dose", "form", "frequency", "status"),
+            ),
+            "",
+        ])
+
+    elif section == "allergies":
+        lines.extend([
+            "## Allergies",
+            render_list_with_trust(
+                profile.get("allergies", []),
+                ("substance", "reaction", "severity"),
+            ),
+            "",
+        ])
+
+    elif section == "relevant_labs":
+        relevant_terms = _visit_reason_keywords(query)
+        all_tests = latest_recent_tests(profile, limit=10)
+        filtered = _filter_tests_by_relevance(all_tests, relevant_terms)[:8]
+        lines.extend([
+            "## Relevant Lab Results",
+            render_list_with_trust(
+                filtered,
+                ("name", "value", "unit", "flag", "date", "reference_range"),
+            ),
+            "",
+        ])
+
+    elif section == "lab_trends":
+        lines.append(render_trends_text(profile))
+
+    elif section == "abnormal_flags":
+        abnormal = recent_abnormal_tests(profile, limit=5)
+        if abnormal:
+            lines.extend(["## Abnormal Flags"])
+            for item in abnormal:
+                lines.append(
+                    f"- {item.get('name')} {item.get('value')} {item.get('unit', '')} "
+                    f"({item.get('flag')}) on {item.get('date', 'unknown')}"
+                )
+            lines.append("")
+
+    elif section == "patterns":
+        insights = build_pattern_insights(
+            profile, medication_history, weight_entries, vital_entries
+        )
+        if insights:
+            lines.extend(["## Pattern Signals"])
+            lines.extend(f"- {item}" for item in insights)
+            lines.append("")
+
+    elif section == "medication_history":
+        if medication_history:
+            lines.extend(["## Recent Medication Changes"])
+            for item in medication_history[-5:]:
+                lines.append(
+                    f"- {item.get('recorded_at', '?')[:10]} | "
+                    f"{item.get('event_type')} | {item.get('medication_name')}"
+                )
+            lines.append("")
+
+    elif section == "medication_conflicts":
+        med_conflicts = [
+            c for c in conflicts
+            if c.get("section") == "medications" and c.get("status") == "open"
+        ]
+        if med_conflicts:
+            lines.extend(["## Open Medication Conflicts"])
+            for item in med_conflicts:
+                lines.append(
+                    f"- {item['identity']} field `{item['field']}`: "
+                    f"'{item['previous']}' vs '{item['new_value']}'"
+                )
+            lines.append("")
+
+    elif section == "related_labs":
+        # Labs related to current medications
+        med_names = {
+            str(m.get("name", "")).lower() for m in profile.get("medications", [])
+        }
+        relevant: set[str] = set()
+        statin_names = {"atorvastatin", "rosuvastatin", "simvastatin", "pravastatin"}
+        if med_names & statin_names:
+            relevant.update(["ldl", "hdl", "triglycerides", "total cholesterol"])
+        if "metformin" in med_names:
+            relevant.update(["a1c", "glucose"])
+        if "levothyroxine" in med_names:
+            relevant.add("tsh")
+        tests = _filter_tests_by_relevance(
+            latest_recent_tests(profile, limit=10), relevant
+        )[:5]
+        if tests:
+            lines.extend([
+                "## Labs Related To Current Medications",
+                render_list_with_trust(
+                    tests,
+                    ("name", "value", "unit", "flag", "date"),
+                ),
+                "",
+            ])
+
+    elif section == "next_followup":
+        nf = next_follow_up(profile)
+        if nf:
+            lines.extend([
+                "## Next Follow-Up",
+                f"- {render_record(nf, ('task', 'due_date', 'status'))}",
+                "",
+            ])
+
+    elif section == "recent_changes":
+        abnormal = recent_abnormal_tests(profile, limit=3)
+        oq = open_reviews(review_queue)
+        oc = open_conflicts_only(conflicts)
+        lines.extend(["## What Changed Recently"])
+        if abnormal:
+            lines.append(
+                "- Recent abnormal labs: " +
+                ", ".join(
+                    f"{i.get('name')} {i.get('value')} {i.get('unit', '')}".strip()
+                    for i in abnormal
+                )
+            )
+        if oq:
+            lines.append(f"- {len(oq)} extracted item(s) still need confirmation")
+        if oc:
+            lines.append(f"- {len(oc)} source conflict(s) remain open")
+        if not abnormal and not oq and not oc:
+            lines.append("- No major recent changes on record")
+        lines.append("")
+
+    elif section == "portal_message":
+        nf = next_follow_up(profile)
+        goal = nf.get("task", "follow-up") if nf else "follow-up"
+        lines.extend([
+            "## Quick Portal Message Draft",
+            render_portal_message_text(profile, goal).split("\n", 4)[-1]
+            if "\n" in render_portal_message_text(profile, goal) else "",
+            "",
+        ])
+
+    elif section == "weight_trend":
+        lines.append(render_weight_trends_text(weight_entries))
+
+    elif section == "vitals_trend":
+        lines.append(render_vitals_trends_text(vital_entries))
+
+    elif section == "bp_insights":
+        bp_entries = [e for e in vital_entries if e.get("metric") == "blood_pressure"]
+        if bp_entries:
+            latest = bp_entries[-1]
+            lines.extend([
+                "## Latest Blood Pressure",
+                f"- {latest.get('value_text')} {latest.get('unit', '')} on {latest.get('entry_date', 'unknown')}",
+            ])
+            elevated = sum(
+                1 for e in bp_entries
+                if (e.get("systolic") or 0) >= 130 or (e.get("diastolic") or 0) >= 80
+            )
+            if elevated:
+                lines.append(f"- Elevated in {elevated} of {len(bp_entries)} recorded entries")
+            lines.append("")
+
+    elif section == "recent_encounters":
+        encounters = profile.get("encounters", [])[-5:]
+        if encounters:
+            lines.extend(["## Recent Encounters"])
+            for e in reversed(encounters):
+                lines.append(
+                    f"- {e.get('date', '?')} | {e.get('kind', '?')} | "
+                    f"{e.get('title', '?')}"
+                )
+            lines.append("")
+
+    elif section == "vitals_snapshot":
+        if vital_entries:
+            # Show latest of each metric
+            by_metric: dict[str, dict[str, Any]] = {}
+            for e in vital_entries:
+                by_metric[e["metric"]] = e
+            lines.extend(["## Latest Vitals"])
+            for metric, entry in sorted(by_metric.items()):
+                lines.append(
+                    f"- {metric}: {entry.get('value_text')} "
+                    f"{entry.get('unit', '')} ({entry.get('entry_date', '?')})"
+                )
+            lines.append("")
+
+    elif section == "overdue_items":
+        overdue = due_follow_ups(profile, days=0)
+        lines.extend(["## Overdue"])
+        if overdue:
+            for item in overdue[:8]:
+                lines.append(
+                    f"- {item.get('task')} | due {item.get('due_date', '?')} | "
+                    f"{item.get('status', '?')}"
+                )
+        else:
+            lines.append("- Nothing overdue right now")
+        lines.append("")
+
+    elif section == "upcoming_items":
+        upcoming = due_follow_ups(profile, days=14)
+        overdue_set = {id(i) for i in due_follow_ups(profile, days=0)}
+        upcoming_only = [i for i in upcoming if id(i) not in overdue_set]
+        lines.extend(["## Coming Up (next 14 days)"])
+        if upcoming_only:
+            for item in upcoming_only[:8]:
+                lines.append(
+                    f"- {item.get('task')} | due {item.get('due_date', '?')}"
+                )
+        else:
+            lines.append("- No dated items in the next 14 days")
+        lines.append("")
+
+    elif section == "inbox_status":
+        lines.extend([
+            "## Inbox",
+            f"- {len(inbox_files)} file(s) waiting" if inbox_files else "- Inbox is clear",
+            "",
+        ])
+
+    elif section == "review_queue_summary":
+        open_items = open_reviews(review_queue)
+        lines.extend([
+            "## Review Queue",
+            f"- {len(open_items)} item(s) need confirmation" if open_items
+            else "- No items waiting for review",
+            "",
+        ])
+
+    elif section == "conflicts_summary":
+        oc = open_conflicts_only(conflicts)
+        lines.extend([
+            "## Open Conflicts",
+            f"- {len(oc)} conflict(s) need resolution" if oc
+            else "- No conflicts open",
+            "",
+        ])
+
+    elif section == "questions":
+        questions = suggested_visit_questions(profile)
+        lines.extend(["## Suggested Questions"])
+        lines.extend(f"- {q}" for q in questions[:4])
+        lines.append("")
+
+    return lines
+
+
+def render_query_dashboard(
+    query: str,
+    profile: dict[str, Any],
+    conflicts: list[dict[str, Any]],
+    review_queue: list[dict[str, Any]],
+    medication_history: list[dict[str, Any]],
+    weight_entries: list[dict[str, Any]],
+    vital_entries: list[dict[str, Any]],
+    inbox_files: list[Path],
+) -> str:
+    """Build a dashboard focused on the user's query.
+
+    Classifies the query into an intent (lab review, medication review,
+    visit prep, symptom triage, vitals, follow-up, or overview) and
+    assembles only the sections relevant to that intent.
+    """
+    intent = classify_query_intent(query)
+    intent_data = QUERY_INTENTS[intent]
+
+    lines = [
+        f"# {intent_data['title']}",
+        "",
+        f"*Focused on: {query}*",
+        "",
+    ]
+
+    for section in intent_data["sections"]:
+        section_lines = _render_dashboard_section(
+            section,
+            profile,
+            conflicts,
+            review_queue,
+            medication_history,
+            weight_entries,
+            vital_entries,
+            inbox_files,
+            query=query,
+        )
+        lines.extend(section_lines)
+
+    lines.extend([
+        "---",
+        f"*Dashboard generated {date.today().isoformat()} | "
+        f"intent: {intent} | "
+        f"query: \"{query}\"*",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_query_dashboard_from_snapshot(
+    query: str,
+    snap: WorkspaceSnapshot,
+) -> str:
+    """Convenience wrapper that unpacks a WorkspaceSnapshot."""
+    return render_query_dashboard(
+        query=query,
+        profile=snap.profile,
+        conflicts=snap.conflicts,
+        review_queue=snap.review_queue,
+        medication_history=snap.medication_history,
+        weight_entries=snap.weight_entries,
+        vital_entries=snap.vital_entries,
+        inbox_files=snap.inbox_files,
+    )

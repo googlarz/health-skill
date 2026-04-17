@@ -225,6 +225,25 @@ Recommended flow:
 9. Review `list-conflicts` when two sources disagree.
 10. Review `HEALTH_REVIEW_QUEUE.json` for extracted lab, medication, or follow-up candidates.
 11. Generate a handoff with `scripts/clinician_handoff.py` before visits when useful.
+12. Use `query-dashboard --query "..."` to generate a focused view for any user question.
+
+### Query-relevant dashboard
+
+When the user asks a health question, generate a focused dashboard instead of showing the full dossier. Use `scripts/care_workspace.py query-dashboard --root . --query "user question here"`.
+
+The dashboard classifies the query into an intent and assembles only the relevant sections:
+
+| Intent | Trigger examples | Focused on |
+|--------|-----------------|------------|
+| lab_review | "what do my labs mean", "LDL trending" | lab results, trends, abnormal flags, patterns |
+| medication_review | "medication side effects", "statin dose" | med list, history, conflicts, related labs |
+| visit_prep | "prepare for appointment", "what to ask doctor" | 30-second summary, meds, labs, portal message, questions |
+| symptom_triage | "should I worry about this pain" | conditions, meds, allergies, recent encounters, vitals |
+| weight_vitals | "blood pressure trend", "weight tracking" | weight/vitals trends, BP insights, patterns |
+| follow_up | "what's overdue", "next steps" | overdue items, upcoming items, inbox, review queue |
+| caregiver_overview | "catch me up", "how is she doing" | full overview with priorities, conditions, meds, patterns |
+
+Prefer this over raw file reads when the user has a specific question. The dashboard output goes to `exports/QUERY_DASHBOARD.md`.
 
 The dossier should stay useful for future sessions:
 

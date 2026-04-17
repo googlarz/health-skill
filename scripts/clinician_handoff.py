@@ -14,8 +14,8 @@ try:
         load_profile,
         notes_dir,
         person_dir,
-        render_record,
     )
+    from .rendering import render_record
 except ImportError:  # pragma: no cover
     from care_workspace import (
         exports_dir,
@@ -24,8 +24,8 @@ except ImportError:  # pragma: no cover
         load_profile,
         notes_dir,
         person_dir,
-        render_record,
     )
+    from rendering import render_record
 
 
 VISIT_HINTS = {

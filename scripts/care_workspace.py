@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import json
 import os
 import re
+import sys
 import shutil
 import sqlite3
 import subprocess
@@ -16,9 +16,12 @@ import tempfile
 import dataclasses
 import hashlib
 from copy import deepcopy
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+if sys.platform != "win32":
+    import fcntl
 
 try:
     import pdfplumber
@@ -496,6 +499,9 @@ def write_assistant_update(root: Path, person_id: str, title: str, bullets: list
 
 @contextlib.contextmanager
 def workspace_lock(root: Path, person_id: str):
+    if sys.platform == "win32":
+        yield
+        return
     path = lock_path(root, person_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -695,6 +701,16 @@ def sync_review_count(root: Path, person_id: str, profile: dict[str, Any]) -> No
     profile["audit"]["review_items_open"] = sum(
         1 for item in items if item.get("status", "open") == "open"
     )
+
+
+def sync_conflict_count_from(conflicts: list, profile: dict) -> None:
+    """Update conflict count from pre-loaded data instead of reading from disk."""
+    profile["audit"]["conflicts_open"] = sum(1 for c in conflicts if c["status"] == "open")
+
+
+def sync_review_count_from(items: list, profile: dict) -> None:
+    """Update review count from pre-loaded data instead of reading from disk."""
+    profile["audit"]["review_items_open"] = sum(1 for i in items if i.get("status", "open") == "open")
 
 
 def append_medication_history(
@@ -1035,9 +1051,9 @@ def load_snapshot(root: Path, person_id: str) -> WorkspaceSnapshot:
     )
 
 
-def document_already_ingested(root: Path, person_id: str, source_path: Path) -> bool:
+def document_already_ingested(root: Path, person_id: str, source_path: Path, precomputed_hash: str | None = None) -> bool:
     """Check if a file with the same content hash was already ingested (#10)."""
-    content_hash = file_content_hash(source_path)
+    content_hash = precomputed_hash or file_content_hash(source_path)
     profile = load_profile(root, person_id)
     for doc in profile.get("documents", []):
         if doc.get("content_hash") == content_hash:
@@ -1054,9 +1070,7 @@ def archive_old_records(
 
     Keeps the active profile slim. Returns the archive path.
     """
-    from dateutil.relativedelta import relativedelta  # noqa: soft dep
-
-    cutoff = (datetime.now(timezone.utc) - relativedelta(months=max_age_months)).date().isoformat()
+    cutoff = (date.today() - timedelta(days=max_age_months * 30)).isoformat()
 
     profile = load_profile(root, person_id)
     archive_path = person_dir(root, person_id) / "HEALTH_ARCHIVE.json"
@@ -1119,28 +1133,3 @@ def staleness_warning(profile: dict[str, Any]) -> str | None:
 PROJECT_ROOT: str = ""
 
 
-def __getattr__(name: str):
-    """Lazy re-export from submodules for backwards compatibility.
-
-    Symbols that were originally in this file but have been moved to
-    ``rendering``, ``extraction``, or ``commands`` are transparently
-    available here so that existing imports continue to work.
-    """
-    import importlib  # noqa: delay import
-
-    for module_name in (
-        "scripts.rendering",
-        "scripts.extraction",
-        "scripts.commands",
-    ):
-        try:
-            mod = importlib.import_module(module_name)
-        except ImportError:
-            # Also try non-package form for direct script invocation.
-            try:
-                mod = importlib.import_module(module_name.split(".")[-1])
-            except ImportError:
-                continue
-        if hasattr(mod, name):
-            return getattr(mod, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

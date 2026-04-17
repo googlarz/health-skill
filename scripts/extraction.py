@@ -7,6 +7,7 @@ import calendar
 import re
 import shutil
 import subprocess
+import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ try:
 except ImportError:
     Image = None
 
+# NOTE: keep both import blocks in sync
 try:
     from .care_workspace import (
         add_note,
@@ -36,6 +38,7 @@ try:
         humanize_name,
         inbox_dir,
         interpret_against_range,
+        list_inbox_files,
         load_review_queue,
         normalize_lab_flag,
         normalize_test_name,
@@ -55,6 +58,7 @@ except ImportError:
         humanize_name,
         inbox_dir,
         interpret_against_range,
+        list_inbox_files,
         load_review_queue,
         normalize_lab_flag,
         normalize_test_name,
@@ -133,13 +137,6 @@ def is_in_inbox(root: Path, person_id: str, source_path: Path) -> bool:
         return False
 
 
-def list_inbox_files(root: Path, person_id: str) -> list[Path]:
-    directory = inbox_dir(root, person_id)
-    if not directory.exists():
-        return []
-    return sorted(path for path in directory.iterdir() if path.is_file())
-
-
 def supported_text_document(path: Path) -> bool:
     return path.suffix.lower() in {".md", ".txt", ".json", ".pdf"}
 
@@ -181,21 +178,21 @@ def read_document_text(path: Path, page_limit: int = 10) -> str:
 
 def extract_lab_candidates(raw_text: str, source_date: str) -> list[dict[str, Any]]:
     candidates = []
-    # Pattern 1: standard space-separated lab lines
+    # Pattern 1: standard space-separated lab lines (named groups)
     _LAB_PATTERN_1 = re.compile(
-        r"^\s*([A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s+(-?\d+(?:\.\d+)?)\s*([A-Za-z%/]+)"
-        r"(?:\s*\(?\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*\)?)?"
-        r"(?:\s+([HLN]|high|low|normal|abnormal))?\s*$",
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s+(?P<value>-?\d+(?:\.\d+)?)\s*(?P<unit>[A-Za-z%/]+)"
+        r"(?:\s*\(?\s*(?P<low>-?\d+(?:\.\d+)?)\s*-\s*(?P<high>-?\d+(?:\.\d+)?)\s*\)?)?"
+        r"(?:\s+(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
         flags=re.IGNORECASE,
     )
-    # Pattern 2: tab-separated, < or > prefixed values, multi-word test names
+    # Pattern 2: tab-separated, < or > prefixed values, multi-word test names (named groups)
     _LAB_PATTERN_2 = re.compile(
-        r"^\s*([A-Za-z][A-Za-z0-9 ()/%+-]{1,60}?)"  # test name (wider)
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,60}?)"  # test name (wider)
         r"(?:\t|  +)"  # tab or 2+ spaces separator
-        r"([<>]?\s*-?\d+(?:\.\d+)?)\s*"  # value with optional < or >
-        r"([A-Za-z%/]+)"  # unit
-        r"(?:\s*\(?\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*\)?)?"  # optional range
-        r"(?:\s+([HLN]|high|low|normal|abnormal))?\s*$",
+        r"(?P<value>[<>]?\s*-?\d+(?:\.\d+)?)\s*"  # value with optional < or >
+        r"(?P<unit>[A-Za-z%/]+)"  # unit
+        r"(?:\s*\(?\s*(?P<low>-?\d+(?:\.\d+)?)\s*-\s*(?P<high>-?\d+(?:\.\d+)?)\s*\)?)?"  # optional range
+        r"(?:\s+(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
         flags=re.IGNORECASE,
     )
     for line in raw_text.splitlines():
@@ -205,7 +202,13 @@ def extract_lab_candidates(raw_text: str, source_date: str) -> list[dict[str, An
             match = _LAB_PATTERN_2.match(stripped)
         if not match:
             continue
-        name, value, unit, low, high, raw_flag = match.groups()
+        groups = match.groupdict()
+        name = groups["name"]
+        value = groups["value"]
+        unit = groups["unit"]
+        low = groups["low"]
+        high = groups["high"]
+        raw_flag = groups["flag"]
         if len(name.strip()) < 2:
             continue
         # Strip < or > prefix for numeric comparison but keep in stored value
@@ -672,7 +675,7 @@ def add_review_items(
     queue = load_review_queue(root, person_id)
     created = []
     for item in items:
-        review_id = f"{date.today().isoformat()}-review-{len(queue) + 1}"
+        review_id = f"review-{uuid.uuid4().hex[:12]}"
         review_item = {
             "id": review_id,
             "status": "open",
@@ -735,15 +738,13 @@ def ingest_document(
 ) -> tuple[Path, Path]:
     ensure_person(root, person_id)
 
-    # Item 10: content hash dedup -- check before ingesting
-    if document_already_ingested(root, person_id, source_path):
-        content_hash = file_content_hash(source_path)
+    # Item 10: content hash dedup -- compute once, reuse everywhere
+    content_hash = file_content_hash(source_path)
+    if document_already_ingested(root, person_id, source_path, precomputed_hash=content_hash):
         print(f"[dedup] Skipping '{source_path.name}' -- content hash {content_hash[:12]}... already ingested.")
         # Return existing archived path from the profile, or source as fallback
         existing_archive = archive_dir(root, person_id) / source_path.name
         return existing_archive, existing_archive
-
-    content_hash = file_content_hash(source_path)
     normalized_source_date = source_date or date.today().isoformat()
     safe_title = title or humanize_name(source_path.stem)
     destination_name = f"{date.today().isoformat()}-{slugify(safe_title)}{source_path.suffix.lower()}"
@@ -773,7 +774,7 @@ def ingest_document(
         "title": safe_title,
         "doc_type": doc_type,
         "source_date": normalized_source_date,
-        "original_path": str(source_path),
+        "original_path": source_path.name,
         "archived_path": str(destination_path),
         "ingest_mode": ingest_mode,
         "content_hash": content_hash,

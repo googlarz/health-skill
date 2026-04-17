@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.care_workspace import (
     ensure_person,
+    list_inbox_files,
     load_profile,
     profile_path,
     save_profile,
@@ -16,7 +17,6 @@ from scripts.care_workspace import (
 )
 from scripts.extraction import (
     extract_lab_candidates,
-    list_inbox_files,
     process_inbox,
 )
 from scripts.rendering import refresh_views

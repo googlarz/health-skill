@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 
+# NOTE: keep both import blocks in sync
 try:
     from .care_workspace import (
+        DEFAULT_PROFILE,
         RECORD_KEYS,
         atomic_write_text,
         calendar_export_path,
@@ -28,6 +31,7 @@ try:
         load_vital_entries,
         load_weight_entries,
         medication_history_path,
+        metrics_db_path,
         next_appointment_path,
         now_utc,
         parse_value,
@@ -42,7 +46,9 @@ try:
         save_profile,
         save_review_queue,
         set_nested_field,
+        slugify,
         summary_path,
+        sync_conflict_count,
         this_week_path,
         timeline_path,
         today_path,
@@ -85,9 +91,11 @@ try:
         render_vitals_trends_text,
         render_weight_trends_text,
         render_appointment_request_text,
+        render_query_dashboard,
     )
 except ImportError:
     from care_workspace import (
+        DEFAULT_PROFILE,
         RECORD_KEYS,
         atomic_write_text,
         calendar_export_path,
@@ -106,6 +114,7 @@ except ImportError:
         load_vital_entries,
         load_weight_entries,
         medication_history_path,
+        metrics_db_path,
         next_appointment_path,
         now_utc,
         parse_value,
@@ -120,7 +129,9 @@ except ImportError:
         save_profile,
         save_review_queue,
         set_nested_field,
+        slugify,
         summary_path,
+        sync_conflict_count,
         this_week_path,
         timeline_path,
         today_path,
@@ -163,6 +174,7 @@ except ImportError:
         render_vitals_trends_text,
         render_weight_trends_text,
         render_appointment_request_text,
+        render_query_dashboard,
     )
 
 
@@ -899,6 +911,33 @@ def command_backup_project(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_query_dashboard(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    with workspace_lock(root, args.person_id):
+        ensure_person(root, args.person_id)
+        profile = load_profile(root, args.person_id)
+        conflicts = load_conflicts(root, args.person_id)
+        review_queue = load_review_queue(root, args.person_id)
+        medication_history = load_medication_history(root, args.person_id)
+        weight_entries = load_weight_entries(root, args.person_id)
+        vital_entries = load_vital_entries(root, args.person_id)
+        inbox_files = list_inbox_files(root, args.person_id)
+        dashboard = render_query_dashboard(
+            query=args.query,
+            profile=profile,
+            conflicts=conflicts,
+            review_queue=review_queue,
+            medication_history=medication_history,
+            weight_entries=weight_entries,
+            vital_entries=vital_entries,
+            inbox_files=inbox_files,
+        )
+        output_path = exports_dir(root, args.person_id) / "QUERY_DASHBOARD.md"
+        atomic_write_text(output_path, dashboard)
+    print(output_path)
+    return 0
+
+
 def command_archive_old_records(args: argparse.Namespace) -> int:
     root = Path(args.root)
     with workspace_lock(root, args.person_id):
@@ -1225,6 +1264,12 @@ def build_parser() -> argparse.ArgumentParser:
     backup_project.add_argument("--root", required=True)
     backup_project.add_argument("--person-id", default="")
     backup_project.set_defaults(func=command_backup_project)
+
+    query_dashboard = subparsers.add_parser("query-dashboard")
+    query_dashboard.add_argument("--root", required=True)
+    query_dashboard.add_argument("--person-id", default="")
+    query_dashboard.add_argument("--query", required=True, help="Natural-language question to focus the dashboard on")
+    query_dashboard.set_defaults(func=command_query_dashboard)
 
     archive_old = subparsers.add_parser("archive-old-records")
     archive_old.add_argument("--root", required=True)

@@ -21,6 +21,7 @@ from scripts.care_workspace import (
     staleness_days,
     staleness_warning,
     upsert_record,
+    archive_old_records,
 )
 from scripts.extraction import (
     classify_document_content,
@@ -229,6 +230,33 @@ class ContentHashDedupTests(unittest.TestCase):
         self.assertIsNotNone(result)
 
 
+class ArchiveOldRecordsTests(unittest.TestCase):
+    """Item 13: archive_old_records uses stdlib only (no dateutil)."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_archive_moves_old_records(self) -> None:
+        ensure_person(self.root, "", "Jane Doe")
+        old_date = (date.today() - timedelta(days=400)).isoformat()
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "120", "unit": "mg/dL",
+            "date": old_date,
+        })
+        profile_before = load_profile(self.root, "")
+        self.assertEqual(len(profile_before["recent_tests"]), 1)
+
+        archive_path = archive_old_records(self.root, "", max_age_months=12)
+
+        self.assertTrue(archive_path.exists())
+        profile_after = load_profile(self.root, "")
+        self.assertEqual(len(profile_after["recent_tests"]), 0)
+
+
 class StalenessTests(unittest.TestCase):
     """Item 18: Staleness indicators."""
 
@@ -359,6 +387,108 @@ class BetterPortalMessageTests(unittest.TestCase):
         profile = load_profile(self.root, "")
         msg = render_portal_message_text(profile, "lipid follow-up")
         self.assertIn("Portal Message", msg)
+
+
+class QueryDashboardTests(unittest.TestCase):
+    """Query-relevant dashboard feature."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(self.root, "", "conditions", {"name": "Hypertension"})
+        upsert_record(self.root, "", "medications", {
+            "name": "Atorvastatin", "dose": "10 mg", "status": "active",
+        })
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "180", "unit": "mg/dL",
+            "date": date.today().isoformat(), "flag": "high",
+        })
+        upsert_record(self.root, "", "follow_up", {
+            "task": "Repeat lipid panel", "due_date": "2026-05-01", "status": "pending",
+        })
+        record_vital(self.root, "", "2026-03-12", "blood_pressure", "132/84", "mmHg")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_lab_query_shows_lab_dashboard(self) -> None:
+        from scripts.rendering import classify_query_intent, render_query_dashboard
+        intent = classify_query_intent("what do my cholesterol labs mean?")
+        self.assertEqual(intent, "lab_review")
+
+        snap = load_snapshot(self.root, "")
+        dashboard = render_query_dashboard(
+            "what do my cholesterol labs mean?",
+            snap.profile, snap.conflicts, snap.review_queue,
+            snap.medication_history, snap.weight_entries, snap.vital_entries,
+            snap.inbox_files,
+        )
+        self.assertIn("Lab Review Dashboard", dashboard)
+        self.assertIn("LDL", dashboard)
+
+    def test_medication_query(self) -> None:
+        from scripts.rendering import classify_query_intent, render_query_dashboard
+        intent = classify_query_intent("should I worry about statin side effects?")
+        self.assertEqual(intent, "medication_review")
+
+        snap = load_snapshot(self.root, "")
+        dashboard = render_query_dashboard(
+            "should I worry about statin side effects?",
+            snap.profile, snap.conflicts, snap.review_queue,
+            snap.medication_history, snap.weight_entries, snap.vital_entries,
+            snap.inbox_files,
+        )
+        self.assertIn("Medication Review Dashboard", dashboard)
+        self.assertIn("Atorvastatin", dashboard)
+
+    def test_visit_prep_query(self) -> None:
+        from scripts.rendering import classify_query_intent
+        intent = classify_query_intent("help me prepare for my doctor appointment")
+        self.assertEqual(intent, "visit_prep")
+
+    def test_symptom_query(self) -> None:
+        from scripts.rendering import classify_query_intent
+        intent = classify_query_intent("I have a headache and feel dizzy, should I worry?")
+        self.assertEqual(intent, "symptom_triage")
+
+    def test_vitals_query(self) -> None:
+        from scripts.rendering import classify_query_intent, render_query_dashboard
+        intent = classify_query_intent("how is my blood pressure trending?")
+        self.assertEqual(intent, "weight_vitals")
+
+        snap = load_snapshot(self.root, "")
+        dashboard = render_query_dashboard(
+            "how is my blood pressure trending?",
+            snap.profile, snap.conflicts, snap.review_queue,
+            snap.medication_history, snap.weight_entries, snap.vital_entries,
+            snap.inbox_files,
+        )
+        self.assertIn("Vitals Dashboard", dashboard)
+
+    def test_followup_query(self) -> None:
+        from scripts.rendering import classify_query_intent
+        intent = classify_query_intent("what follow-ups are overdue?")
+        self.assertEqual(intent, "follow_up")
+
+    def test_generic_query_falls_back_to_overview(self) -> None:
+        from scripts.rendering import classify_query_intent
+        intent = classify_query_intent("give me a quick update")
+        self.assertEqual(intent, "caregiver_overview")
+
+    def test_snapshot_convenience_wrapper(self) -> None:
+        from scripts.rendering import render_query_dashboard_from_snapshot
+        snap = load_snapshot(self.root, "")
+        dashboard = render_query_dashboard_from_snapshot("catch me up", snap)
+        self.assertIn("Health Overview Dashboard", dashboard)
+        self.assertIn("Jane Doe", dashboard)
+
+    def test_dashboard_includes_intent_metadata(self) -> None:
+        from scripts.rendering import render_query_dashboard_from_snapshot
+        snap = load_snapshot(self.root, "")
+        dashboard = render_query_dashboard_from_snapshot("LDL labs", snap)
+        self.assertIn("intent: lab_review", dashboard)
+        self.assertIn('query: "LDL labs"', dashboard)
 
 
 if __name__ == "__main__":
