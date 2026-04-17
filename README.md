@@ -1,130 +1,144 @@
-# Health Skill
+<p align="center">
+  <h1 align="center">Health Skill</h1>
+  <p align="center">
+    Local-first health workspace for Claude — organize records, track labs, prepare for visits, keep memory across sessions.
+  </p>
+  <p align="center">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+    <img src="https://img.shields.io/badge/tests-110%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
+  </p>
+</p>
 
-[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+---
 
-Local-first health organization and care-navigation skill for Claude.
+> One person = one folder. The folder is the memory, not the chat.
 
-Health Skill turns normal folders into durable health workspaces. It helps Claude organize records, explain labs in context, prepare for appointments, track follow-ups, and keep structured memory across sessions — without a cloud platform.
+Health Skill gives Claude a **durable workspace** so it can reason across your full health picture — labs connected to medications connected to follow-ups — instead of starting from scratch every conversation.
 
-## Why This Exists
+## See It In Action
 
-Most health-related AI use loses context between sessions. You upload a PDF, ask a few questions, and everything disappears into chat history.
+Explore the [demo workspace](examples/demo-karen/) for Karen Mitchell — a realistic example with lab trends, weight tracking, medications, and visit prep.
 
-Health Skill solves that by giving Claude a durable workspace. Future sessions start from current conditions, medications, recent labs, pending follow-ups, and unresolved questions. A single lab result is useful; a lab result connected to past results, medication changes, and follow-up plans is much more useful.
+```
+# Karen's HEALTH_HOME.md
 
-## Quick Start (5 commands)
+⚠️ 1 file(s) in inbox | ✅ No items need review | ✅ No overdue follow-ups
+────────────────────────────────────────
 
-```bash
-# 1. Create a folder and initialize it
-mkdir ~/Health/jane-doe && cd ~/Health/jane-doe
-python3 /path/to/health-skill/scripts/care_workspace.py init-project --root "$(pwd)" --name "Jane Doe"
+## Right Now
+- Process 1 file(s) sitting in inbox.
+- Keep an eye on abnormal labs: LDL 141 mg/dL, Vitamin D 28 ng/mL
 
-# 2. Drop a lab report or health document into inbox/
-cp ~/Downloads/lab-results.pdf inbox/
+## LDL Trend
+- Trend: 188 → 162 → 141 ↓ (notable improvement on atorvastatin)
 
-# 3. Process it (extracts labs, meds, follow-ups automatically)
-python3 /path/to/health-skill/scripts/care_workspace.py process-inbox --root "$(pwd)"
-
-# 4. Open your health home screen
-cat HEALTH_HOME.md
-
-# 5. Ask a focused question (generates a dashboard just for your query)
-python3 /path/to/health-skill/scripts/care_workspace.py query-dashboard --root "$(pwd)" --query "what do my labs mean?" --save
-cat exports/QUERY_DASHBOARD.md
+## Weight
+- Latest: 76.1 kg | Trend: █▅▃▁ (-2.7%)
 ```
 
-**Which command do I use?**
+## Quick Start
 
-| I want to... | Command |
-|---|---|
-| Set up a new person folder | `init-project` |
-| Add a new document | Drop into `inbox/`, then `process-inbox` |
-| See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
-| Prepare for an appointment | Open `NEXT_APPOINTMENT.md` or `query-dashboard --query "visit prep"` |
-| Ask a health question | `query-dashboard --query "your question"` |
-| Preview without changing anything | `process-inbox --dry-run` |
+### With Claude Cowork (recommended)
 
-See [docs/commands.md](docs/commands.md) for the full reference.
+1. Create a folder for each person (e.g., `~/Health/mom/`)
+2. Open it in Claude Cowork → `Use existing folder`
+3. Tell Claude: `Use /health-skill` and `Initialize this folder for Mom`
+4. Drop health documents into `inbox/` and ask Claude to process them
 
-## Key Files
+### From the command line
 
-| File | Purpose |
-|------|---------|
-| `HEALTH_HOME.md` | All-in-one home screen |
-| `TODAY.md` | What to do now |
-| `NEXT_APPOINTMENT.md` | Visit prep |
-| `HEALTH_PROFILE.json` | Structured source of truth |
+```bash
+# Initialize
+python3 scripts/care_workspace.py init-project \
+  --root ~/Health/mom --name "Mom"
 
-See [docs/files.md](docs/files.md) for the full list.
+# Drop a lab report into inbox/, then process
+python3 scripts/care_workspace.py process-inbox --root ~/Health/mom
+
+# Ask a question — get a focused dashboard
+python3 scripts/care_workspace.py query-dashboard \
+  --root ~/Health/mom --query "how are Mom's labs?" --save
+```
+
+## What You Get
+
+| File | What it does |
+|------|-------------|
+| **`HEALTH_HOME.md`** | Visual home screen — status bar, priorities, patterns, progress |
+| **`TODAY.md`** | Smallest useful set of actions with ☐ checkboxes |
+| **`NEXT_APPOINTMENT.md`** | Visit prep — 30-second summary, portal message draft, questions |
+| **`HEALTH_TRENDS.md`** | Lab trends with sparklines and directional arrows |
+| **`WEIGHT_TRENDS.md`** | Weight series with visual sparkline chart |
+| `START_HERE.md` | Dynamic entry point — shows what changed since last session |
+| `HEALTH_DOSSIER.md` | Comprehensive context for Claude to read first |
+| `REVIEW_WORKLIST.md` | Conversational review: "Items I'm Confident About" / "Items That Need Your Eye" |
+
+See [docs/files.md](docs/files.md) for the complete list.
+
+## Key Features
+
+**Query-relevant dashboards** — Ask any health question and get a focused view with only the relevant data, not the full dossier.
+
+**Trust-aware extraction** — Facts are labeled by confidence. OCR-derived data is flagged for review. You confirm what matters.
+
+**Medication safety** — Adding a medication that conflicts with a known allergy triggers a warning automatically.
+
+**Pattern detection** — Connects labs to medications to follow-ups over time. Flags stale tests, temporal side-effect correlations, and overdue follow-ups.
+
+**Extraction accuracy audit** — Tracks what was extracted vs. what you accepted/rejected, so you know which patterns are working.
+
+**Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
 
 ## Who This Is For
 
-- People managing recurring appointments, labs, and meds
-- Caregivers helping a parent, partner, or child
-- Anyone who wants Claude to be useful across months, not just one conversation
-
-## What It Does Well
-
-- Durable health folder per person
-- Lab and medication tracking with trends
-- Trust-aware extraction (facts labeled by confidence)
-- Appointment prep and clinician packets
-- Caregiver dashboard across multiple people
-- Portable exports (ICS calendars, redacted summaries, handoff notes)
+- Managing your own recurring appointments, labs, and medications
+- Helping a parent, partner, or child with health admin
+- Keeping Claude useful across months, not just one conversation
+- Anyone who cares more about continuity and organization than flashy app UX
 
 ## What It Is Not
 
-- Not a doctor or diagnostic system
-- Not a prescribing tool
-- Not a HIPAA-compliant SaaS product
-- Not a replacement for emergency care
+- Not a doctor, diagnostic system, or prescribing tool
+- Not a HIPAA-compliant platform
+- Not a replacement for emergency care or licensed clinicians
 
-## Safety Model
-
-Health Skill is intentionally bounded. It explains and organizes clinician-given information, helps with visit prep and care navigation, and escalates conservatively when symptoms sound urgent. See [references/safety-protocol.md](references/safety-protocol.md).
-
-## Review Workflow
-
-Extracted facts are labeled by confidence:
-
-- `safe_to_auto_apply` — high-confidence structured data
-- `needs_quick_confirmation` — likely correct but worth checking
-- `do_not_trust_without_human_review` — OCR or low-confidence extraction
+See [references/safety-protocol.md](references/safety-protocol.md) for the full safety model.
 
 ## Project Structure
 
-```text
-health-skill/
-  SKILL.md          # Runtime behavior for Claude
-  README.md
-  scripts/
-    care_workspace.py   # Core data model and storage
-    rendering.py        # View generation
-    extraction.py       # Document processing and inbox
-    commands.py         # CLI commands and parser
-    clinician_handoff.py
-    caregiver_dashboard.py
-    apple_ocr.swift     # macOS Vision OCR
-  references/
-  assets/
-  tests/
-  docs/
 ```
-
-## Tests
-
-```bash
-python3 -m unittest discover tests -v
+health-skill/
+  SKILL.md                    # Claude runtime behavior
+  scripts/
+    care_workspace.py         # Core data model (1200 lines)
+    rendering.py              # Visual view generation (2500 lines)
+    extraction.py             # Document processing + inbox (900 lines)
+    commands.py               # CLI (1400 lines)
+    clinician_handoff.py      # Visit-specific handoffs
+    caregiver_dashboard.py    # Multi-person overview
+    apple_ocr.swift           # macOS Vision OCR
+  tests/                      # 110 tests
+  docs/                       # Setup guide, commands, file reference
+  examples/demo-karen/        # Pre-populated demo workspace
+  references/                 # Safety protocol, integration points
 ```
 
 ## Documentation
 
-- [SKILL.md](SKILL.md) — Runtime behavior and Claude instructions
-- [docs/setup-guide.md](docs/setup-guide.md) — Detailed setup for non-technical users
-- [docs/commands.md](docs/commands.md) — CLI command reference
-- [docs/files.md](docs/files.md) — Workspace files reference
-- [references/cowork-tutorial.md](references/cowork-tutorial.md) — Human workflow guide
-- [CONTRIBUTING.md](CONTRIBUTING.md) — How to contribute
+| Doc | Purpose |
+|-----|---------|
+| [SKILL.md](SKILL.md) | How Claude uses the skill at runtime |
+| [docs/setup-guide.md](docs/setup-guide.md) | Step-by-step for non-technical users |
+| [docs/commands.md](docs/commands.md) | Full CLI reference |
+| [docs/files.md](docs/files.md) | Every workspace file explained |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+
+## Tests
+
+```bash
+python3 -m unittest discover tests -v   # 110 tests, ~1.5s
+```
 
 ## License
 
