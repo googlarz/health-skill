@@ -47,6 +47,7 @@ try:
         slugify,
         title_case_name,
         upsert_record,
+        log_extraction_event,
     )
 except ImportError:
     from care_workspace import (
@@ -67,6 +68,7 @@ except ImportError:
         slugify,
         title_case_name,
         upsert_record,
+        log_extraction_event,
     )
 
 
@@ -878,7 +880,19 @@ def process_extracted_candidates(
     extracted_items: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     created = add_review_items(root, person_id, extracted_items, source_title, source_date)
-    for item in extracted_items:
+    for item, review_item in zip(extracted_items, created):
+        # Log every extraction for accuracy tracking
+        log_extraction_event(
+            root, person_id,
+            event_type="auto_applied" if item.get("auto_apply") else "extracted",
+            section=item["section"],
+            candidate=item["candidate"],
+            confidence=item.get("confidence", ""),
+            tier=review_item.get("tier", ""),
+            source_title=source_title,
+            source_snippet=item.get("source_snippet", ""),
+            review_id=review_item["id"],
+        )
         if item.get("auto_apply"):
             upsert_record(
                 root,

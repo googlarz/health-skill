@@ -248,6 +248,14 @@ def dashboard_cache_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "DASHBOARD_CACHE.json"
 
 
+def extraction_audit_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "EXTRACTION_AUDIT.json"
+
+
+def extraction_accuracy_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "EXTRACTION_ACCURACY.md"
+
+
 def reconciliation_path(root: Path, person_id: str) -> Path:
     return exports_dir(root, person_id) / "medication_reconciliation.md"
 
@@ -1465,6 +1473,199 @@ def check_medication_allergy_conflicts(profile: dict) -> list[dict]:
                 })
 
     return conflicts
+
+
+# ---------------------------------------------------------------------------
+# Extraction audit: measure and improve extraction accuracy
+# ---------------------------------------------------------------------------
+
+
+def load_extraction_audit(root: Path, person_id: str) -> list[dict[str, Any]]:
+    path = extraction_audit_path(root, person_id)
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        bak = path.with_suffix(".json.bak")
+        if bak.exists():
+            try:
+                return json.loads(bak.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return []
+
+
+def save_extraction_audit(root: Path, person_id: str, audit: list[dict[str, Any]]) -> None:
+    path = extraction_audit_path(root, person_id)
+    bak = path.with_suffix(".json.bak")
+    if path.exists():
+        try:
+            shutil.copy2(path, bak)
+        except OSError:
+            pass
+    atomic_write_text(path, json.dumps(audit, indent=2) + "\n")
+
+
+def log_extraction_event(
+    root: Path,
+    person_id: str,
+    event_type: str,
+    section: str,
+    candidate: dict[str, Any],
+    confidence: str = "",
+    tier: str = "",
+    source_title: str = "",
+    source_snippet: str = "",
+    review_id: str = "",
+    resolution: str = "",
+    note: str = "",
+) -> None:
+    """Log an extraction event for accuracy tracking.
+
+    event_type: 'extracted', 'auto_applied', 'accepted', 'rejected', 'applied'
+
+    NOTE: This function does NOT acquire workspace_lock because it is
+    typically called from within an already-locked context (command handlers).
+    The caller is responsible for holding the lock.
+    """
+    audit = load_extraction_audit(root, person_id)
+    audit.append({
+        "timestamp": now_utc(),
+        "event_type": event_type,
+        "section": section,
+        "candidate_summary": _candidate_summary(section, candidate),
+        "confidence": confidence,
+        "tier": tier,
+        "source_title": source_title,
+        "source_snippet": (source_snippet or "")[:200],
+        "review_id": review_id,
+        "resolution": resolution,
+        "note": note,
+    })
+    # Keep last 500 entries
+    if len(audit) > 500:
+        audit = audit[-500:]
+    save_extraction_audit(root, person_id, audit)
+
+
+def _candidate_summary(section: str, candidate: dict[str, Any]) -> str:
+    """One-line summary of a candidate for audit logging."""
+    if section == "recent_tests":
+        return f"{candidate.get('name', '?')} {candidate.get('value', '?')} {candidate.get('unit', '')}"
+    if section == "medications":
+        return f"{candidate.get('name', '?')} {candidate.get('dose', '')}"
+    if section == "allergies":
+        return f"{candidate.get('substance', '?')}"
+    if section == "conditions":
+        return f"{candidate.get('name', '?')}"
+    if section == "follow_up":
+        return f"{candidate.get('task', '?')}"
+    return str(candidate)[:80]
+
+
+def compute_extraction_stats(root: Path, person_id: str) -> dict[str, Any]:
+    """Compute accuracy statistics from the extraction audit log."""
+    audit = load_extraction_audit(root, person_id)
+    if not audit:
+        return {"total_events": 0, "sections": {}, "overall": {}}
+
+    by_section: dict[str, dict[str, int]] = {}
+    for entry in audit:
+        section = entry.get("section", "unknown")
+        event = entry.get("event_type", "unknown")
+        if section not in by_section:
+            by_section[section] = {
+                "extracted": 0,
+                "auto_applied": 0,
+                "accepted": 0,
+                "rejected": 0,
+                "applied": 0,
+            }
+        counts = by_section[section]
+        if event in counts:
+            counts[event] += 1
+
+    section_stats = {}
+    totals = {"extracted": 0, "auto_applied": 0, "accepted": 0, "rejected": 0, "applied": 0}
+    for section, counts in by_section.items():
+        reviewed = counts["accepted"] + counts["rejected"]
+        accepted = counts["accepted"] + counts["applied"] + counts["auto_applied"]
+        total_out = counts["extracted"]
+        accuracy = round(accepted / reviewed * 100, 1) if reviewed > 0 else None
+        rejection_rate = round(counts["rejected"] / reviewed * 100, 1) if reviewed > 0 else None
+        section_stats[section] = {
+            **counts,
+            "reviewed": reviewed,
+            "accuracy_pct": accuracy,
+            "rejection_rate_pct": rejection_rate,
+        }
+        for k in totals:
+            totals[k] += counts.get(k, 0)
+
+    total_reviewed = totals["accepted"] + totals["rejected"]
+    total_accepted = totals["accepted"] + totals["applied"] + totals["auto_applied"]
+    overall_accuracy = round(total_accepted / total_reviewed * 100, 1) if total_reviewed > 0 else None
+    overall_rejection = round(totals["rejected"] / total_reviewed * 100, 1) if total_reviewed > 0 else None
+
+    return {
+        "total_events": len(audit),
+        "sections": section_stats,
+        "overall": {
+            **totals,
+            "reviewed": total_reviewed,
+            "accuracy_pct": overall_accuracy,
+            "rejection_rate_pct": overall_rejection,
+        },
+    }
+
+
+def render_extraction_accuracy_text(stats: dict[str, Any]) -> str:
+    """Render EXTRACTION_ACCURACY.md from computed stats."""
+    lines = [
+        "# Extraction Accuracy",
+        "",
+    ]
+    if stats["total_events"] == 0:
+        lines.append("No extraction events recorded yet. Process some documents to start tracking accuracy.")
+        lines.append("")
+        return "\n".join(lines)
+
+    overall = stats["overall"]
+    lines.extend([
+        "## Overall",
+        f"- Total extraction events: {stats['total_events']}",
+        f"- Extracted: {overall['extracted']} | Auto-applied: {overall['auto_applied']}",
+        f"- Reviewed: {overall['reviewed']} (accepted: {overall['accepted']}, rejected: {overall['rejected']})",
+        f"- Applied after review: {overall['applied']}",
+    ])
+    if overall["accuracy_pct"] is not None:
+        lines.append(f"- **Acceptance rate: {overall['accuracy_pct']}%**")
+    if overall["rejection_rate_pct"] is not None:
+        lines.append(f"- Rejection rate: {overall['rejection_rate_pct']}%")
+    lines.append("")
+
+    lines.append("## By Section")
+    for section, s in sorted(stats["sections"].items()):
+        lines.extend([
+            f"### {section}",
+            f"- Extracted: {s['extracted']} | Auto-applied: {s['auto_applied']}",
+            f"- Reviewed: {s['reviewed']} (accepted: {s['accepted']}, rejected: {s['rejected']})",
+        ])
+        if s["accuracy_pct"] is not None:
+            lines.append(f"- Acceptance rate: {s['accuracy_pct']}%")
+        if s["rejection_rate_pct"] is not None and s["rejection_rate_pct"] > 30:
+            lines.append(f"- ⚠ High rejection rate ({s['rejection_rate_pct']}%) — extraction patterns for {section} may need improvement")
+        lines.append("")
+
+    lines.extend([
+        "## What This Means",
+        "- High acceptance rate (>80%) means extraction patterns are working well for that section.",
+        "- High rejection rate (>30%) means the patterns are producing false positives — the regexes may need tightening.",
+        "- Sections with many extractions but zero reviews have unconfirmed data in the record.",
+        "",
+    ])
+    return "\n".join(lines)
 
 
 # Sentinel for project-root mode (one person = one folder).

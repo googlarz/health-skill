@@ -63,6 +63,10 @@ try:
         find_cached_dashboard,
         record_intent_usage,
         save_dashboard_to_cache,
+        log_extraction_event,
+        compute_extraction_stats,
+        render_extraction_accuracy_text,
+        extraction_accuracy_path,
     )
     from .extraction import (
         ingest_document,
@@ -150,6 +154,10 @@ except ImportError:
         find_cached_dashboard,
         record_intent_usage,
         save_dashboard_to_cache,
+        log_extraction_event,
+        compute_extraction_stats,
+        render_extraction_accuracy_text,
+        extraction_accuracy_path,
     )
     from extraction import (
         ingest_document,
@@ -389,6 +397,18 @@ def command_resolve_review_item(args: argparse.Namespace) -> int:
                 item["status"] = args.status
                 item["resolution_note"] = args.note or ""
                 item["resolved_at"] = now_utc()
+                log_extraction_event(
+                    root, args.person_id,
+                    event_type=args.status,
+                    section=item.get("section", ""),
+                    candidate=item.get("candidate", {}),
+                    confidence=item.get("confidence", ""),
+                    tier=item.get("tier", ""),
+                    source_title=item.get("source_title", ""),
+                    review_id=args.review_id,
+                    resolution=args.status,
+                    note=args.note or "",
+                )
                 updated = True
                 break
         if not updated:
@@ -431,6 +451,17 @@ def command_apply_review_item(args: argparse.Namespace) -> int:
         target["applied"] = True
         target["status"] = "applied"
         target["applied_at"] = now_utc()
+        log_extraction_event(
+            root, args.person_id,
+            event_type="applied",
+            section=target.get("section", ""),
+            candidate=target.get("candidate", {}),
+            confidence=target.get("confidence", ""),
+            tier=target.get("tier", ""),
+            source_title=target.get("source_title", ""),
+            review_id=args.review_id,
+            resolution="applied",
+        )
         save_review_queue(root, args.person_id, items)
         refresh_views(root, args.person_id)
         write_assistant_update(
@@ -466,6 +497,13 @@ def command_apply_review_tier(args: argparse.Namespace) -> int:
             item["applied"] = True
             item["status"] = "applied"
             item["applied_at"] = now_utc()
+            log_extraction_event(
+                root, args.person_id, event_type="applied",
+                section=item.get("section", ""), candidate=item.get("candidate", {}),
+                confidence=item.get("confidence", ""), tier=item.get("tier", ""),
+                source_title=item.get("source_title", ""), review_id=item.get("id", ""),
+                resolution="applied",
+            )
             changed += 1
         save_review_queue(root, args.person_id, items)
         refresh_views(root, args.person_id)
@@ -493,6 +531,13 @@ def command_resolve_review_tier(args: argparse.Namespace) -> int:
             item["status"] = args.status
             item["resolution_note"] = args.note or ""
             item["resolved_at"] = now_utc()
+            log_extraction_event(
+                root, args.person_id, event_type=args.status,
+                section=item.get("section", ""), candidate=item.get("candidate", {}),
+                confidence=item.get("confidence", ""), tier=item.get("tier", ""),
+                source_title=item.get("source_title", ""), review_id=item.get("id", ""),
+                resolution=args.status, note=args.note or "",
+            )
             changed += 1
         save_review_queue(root, args.person_id, items)
         refresh_views(root, args.person_id)
@@ -1004,6 +1049,21 @@ def command_archive_old_records(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_extraction_audit(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    stats = compute_extraction_stats(root, args.person_id)
+    if args.json:
+        print(json.dumps(stats, indent=2))
+    else:
+        report = render_extraction_accuracy_text(stats)
+        output_path = extraction_accuracy_path(root, args.person_id)
+        atomic_write_text(output_path, report)
+        print(report)
+        print(f"\nSaved to: {output_path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Health Skill workspace helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1320,6 +1380,12 @@ def build_parser() -> argparse.ArgumentParser:
     archive_old.add_argument("--person-id", default="")
     archive_old.add_argument("--max-age-months", type=int, default=12, help="Archive records older than N months (default: 12)")
     archive_old.set_defaults(func=command_archive_old_records)
+
+    extraction_audit = subparsers.add_parser("extraction-audit")
+    extraction_audit.add_argument("--root", required=True)
+    extraction_audit.add_argument("--person-id", default="")
+    extraction_audit.add_argument("--json", action="store_true", help="Output raw JSON stats instead of markdown")
+    extraction_audit.set_defaults(func=command_extraction_audit)
 
     return parser
 

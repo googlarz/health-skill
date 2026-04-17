@@ -800,5 +800,108 @@ class ErrorIsolationTests(unittest.TestCase):
         self.assertEqual(rows[0]["name"], "Good Person")
 
 
+class ExtractionAuditTests(unittest.TestCase):
+    """Extraction accuracy audit system."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_log_and_compute_stats(self) -> None:
+        from scripts.care_workspace import (
+            compute_extraction_stats,
+            log_extraction_event,
+        )
+        # Simulate extraction flow
+        log_extraction_event(
+            self.root, "", event_type="extracted",
+            section="recent_tests", candidate={"name": "LDL", "value": "180"},
+            confidence="high", tier="safe_to_auto_apply",
+            source_title="lab report", review_id="r1",
+        )
+        log_extraction_event(
+            self.root, "", event_type="auto_applied",
+            section="recent_tests", candidate={"name": "HDL", "value": "55"},
+            confidence="high", tier="safe_to_auto_apply",
+            source_title="lab report", review_id="r2",
+        )
+        log_extraction_event(
+            self.root, "", event_type="accepted",
+            section="medications", candidate={"name": "Atorvastatin"},
+            confidence="medium", review_id="r3", resolution="accepted",
+        )
+        log_extraction_event(
+            self.root, "", event_type="rejected",
+            section="medications", candidate={"name": "Tylenol"},
+            confidence="low", review_id="r4", resolution="rejected",
+        )
+
+        stats = compute_extraction_stats(self.root, "")
+        self.assertEqual(stats["total_events"], 4)
+        self.assertIn("recent_tests", stats["sections"])
+        self.assertIn("medications", stats["sections"])
+        # Medications: 1 accepted + 1 rejected = 2 reviewed, 50% accuracy
+        med_stats = stats["sections"]["medications"]
+        self.assertEqual(med_stats["reviewed"], 2)
+        self.assertEqual(med_stats["accuracy_pct"], 50.0)
+
+    def test_render_accuracy_report(self) -> None:
+        from scripts.care_workspace import (
+            compute_extraction_stats,
+            log_extraction_event,
+            render_extraction_accuracy_text,
+        )
+        log_extraction_event(
+            self.root, "", event_type="extracted",
+            section="recent_tests", candidate={"name": "LDL", "value": "180"},
+        )
+        log_extraction_event(
+            self.root, "", event_type="rejected",
+            section="recent_tests", candidate={"name": "LDL", "value": "180"},
+            resolution="rejected",
+        )
+        stats = compute_extraction_stats(self.root, "")
+        report = render_extraction_accuracy_text(stats)
+        self.assertIn("Extraction Accuracy", report)
+        self.assertIn("recent_tests", report)
+
+    def test_empty_audit_report(self) -> None:
+        from scripts.care_workspace import (
+            compute_extraction_stats,
+            render_extraction_accuracy_text,
+        )
+        stats = compute_extraction_stats(self.root, "")
+        report = render_extraction_accuracy_text(stats)
+        self.assertIn("No extraction events", report)
+
+    def test_audit_logged_on_inbox_processing(self) -> None:
+        from scripts.care_workspace import load_extraction_audit
+        from scripts.extraction import process_inbox
+        inbox = self.root / "inbox"
+        source = inbox / "lipid-panel.txt"
+        source.write_text("LDL 162 mg/dL 0-99 H\nHDL 44 mg/dL 40-999 N\n", encoding="utf-8")
+        process_inbox(self.root, "")
+        audit = load_extraction_audit(self.root, "")
+        self.assertGreater(len(audit), 0)
+        self.assertTrue(any(e["event_type"] in ("extracted", "auto_applied") for e in audit))
+
+    def test_audit_capped_at_500(self) -> None:
+        from scripts.care_workspace import (
+            load_extraction_audit,
+            log_extraction_event,
+        )
+        for i in range(510):
+            log_extraction_event(
+                self.root, "", event_type="extracted",
+                section="recent_tests", candidate={"name": f"Test{i}"},
+            )
+        audit = load_extraction_audit(self.root, "")
+        self.assertLessEqual(len(audit), 500)
+
+
 if __name__ == "__main__":
     unittest.main()
