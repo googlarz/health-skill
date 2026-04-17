@@ -37,19 +37,67 @@ Explore the [demo workspace](examples/demo-karen/) for Karen Mitchell — a real
 - Latest: 76.1 kg | Trend: █▅▃▁ (-2.7%)
 ```
 
-## Quick Start
+## Installation
 
-### With Claude Cowork (recommended)
-
-1. Create a folder for each person (e.g., `~/Health/mom/`)
-2. Open it in Claude Cowork → `Use existing folder`
-3. Tell Claude: `Use /health-skill` and `Initialize this folder for Mom`
-4. Drop health documents into `inbox/` and ask Claude to process them
-
-### From the command line
+### Claude Code (CLI)
 
 ```bash
-# Initialize
+# Clone the repo
+git clone https://github.com/googlarz/health-skill.git
+cd health-skill
+
+# Install as a local skill (symlink into Claude's skills directory)
+ln -sf "$(pwd)" ~/.claude/skills/health-skill
+
+# Verify
+ls ~/.claude/skills/health-skill/SKILL.md
+```
+
+Claude Code will now recognize `/health-skill` as an available skill. You can invoke it with `Use /health-skill` in any conversation, or reference it in your project's `CLAUDE.md`:
+
+```md
+# CLAUDE.md
+Use /health-skill
+
+## Project Context
+This is a health workspace for Mom. One person per folder.
+```
+
+### Claude Cowork (Desktop Projects)
+
+1. **Download** the repo: `Code` → `Download ZIP` from GitHub, or clone it
+2. **Place** the `health-skill` folder somewhere stable (e.g., `~/Documents/health-skill/`)
+3. **Symlink** it into Claude's skills directory:
+   ```bash
+   ln -sf ~/Documents/health-skill ~/.claude/skills/health-skill
+   ```
+4. **Create a folder** for each person you're managing:
+   ```
+   ~/Health/
+     mom/
+     dad/
+     me/
+   ```
+5. **Open** a person folder in Claude Cowork → `Use existing folder`
+6. **Tell Claude**: `Use /health-skill` and `Initialize this folder for Mom`
+7. **Drop** health documents (lab PDFs, discharge notes) into the `inbox/` folder
+8. **Ask Claude** to process them — it will extract labs, medications, and follow-ups automatically
+
+Each person folder becomes a durable health workspace that Claude remembers across sessions.
+
+### Updating
+
+```bash
+cd ~/.claude/skills/health-skill  # or wherever you cloned it
+git pull origin main
+```
+
+The symlink means Claude always uses the latest version.
+
+## Quick Start
+
+```bash
+# Initialize a person folder
 python3 scripts/care_workspace.py init-project \
   --root ~/Health/mom --name "Mom"
 
@@ -60,6 +108,19 @@ python3 scripts/care_workspace.py process-inbox --root ~/Health/mom
 python3 scripts/care_workspace.py query-dashboard \
   --root ~/Health/mom --query "how are Mom's labs?" --save
 ```
+
+**Which command do I use?**
+
+| I want to... | Command |
+|---|---|
+| Set up a new person folder | `init-project` |
+| Add a new document | Drop into `inbox/`, then `process-inbox` |
+| See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
+| Prepare for an appointment | `query-dashboard --query "visit prep"` |
+| Ask a health question | `query-dashboard --query "your question"` |
+| Check extraction accuracy | `extraction-audit` |
+
+See [docs/commands.md](docs/commands.md) for the full reference.
 
 ## What You Get
 
