@@ -1668,6 +1668,104 @@ def render_extraction_accuracy_text(stats: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Session change detection (#Item 3)
+# ---------------------------------------------------------------------------
+
+
+def session_marker_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / ".last_session"
+
+
+def mark_session(root: Path, person_id: str) -> None:
+    """Write current timestamp to .last_session marker file."""
+    atomic_write_text(session_marker_path(root, person_id), now_utc() + "\n")
+
+
+def changes_since_last_session(root: Path, person_id: str) -> dict[str, Any]:
+    """Return a dict describing what changed since the last session marker.
+
+    Keys:
+        last_session: ISO timestamp string or None
+        days_ago: float days since last session or None
+        new_notes: count of notes created after last session
+        new_documents: count of documents ingested after last session
+        profile_changes: list of section names that changed
+        new_review_items: count of review items created after last session
+        resolved_items: count of items resolved after last session
+    """
+    marker = session_marker_path(root, person_id)
+    last_session: str | None = None
+    last_dt: datetime | None = None
+    if marker.exists():
+        raw = marker.read_text(encoding="utf-8").strip()
+        if raw:
+            last_session = raw
+            try:
+                last_dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                last_dt = None
+
+    result: dict[str, Any] = {
+        "last_session": last_session,
+        "days_ago": None,
+        "new_notes": 0,
+        "new_documents": 0,
+        "profile_changes": [],
+        "new_review_items": 0,
+        "resolved_items": 0,
+    }
+
+    if last_dt is None:
+        return result
+
+    now = datetime.now(timezone.utc)
+    result["days_ago"] = round((now - last_dt).total_seconds() / 86400, 1)
+    cutoff = last_session  # ISO string comparison
+
+    # Count new notes by file modification time
+    nd = notes_dir(root, person_id)
+    if nd.exists():
+        for note_path in nd.glob("*.md"):
+            try:
+                mtime = datetime.fromtimestamp(note_path.stat().st_mtime, tz=timezone.utc)
+                if mtime > last_dt:
+                    result["new_notes"] += 1
+            except OSError:
+                pass
+
+    # Count new documents from profile
+    profile = load_profile(root, person_id)
+    for doc in profile.get("documents", []):
+        doc_date = doc.get("last_updated") or doc.get("source_date") or ""
+        if doc_date and doc_date > cutoff:
+            result["new_documents"] += 1
+
+    # Check profile updated_at vs last session
+    profile_updated = profile.get("audit", {}).get("updated_at", "")
+    if profile_updated and profile_updated > cutoff:
+        # Identify which sections have recent updates
+        for section in RECORD_KEYS:
+            for item in profile.get(section, []):
+                item_updated = item.get("last_updated", "")
+                if item_updated and item_updated > cutoff:
+                    if section not in result["profile_changes"]:
+                        result["profile_changes"].append(section)
+                    break
+
+    # Count new and resolved review items
+    review_queue = load_review_queue(root, person_id)
+    for item in review_queue:
+        detected = item.get("detected_at", "")
+        if detected and detected > cutoff and item.get("status", "open") == "open":
+            result["new_review_items"] += 1
+        resolved = item.get("resolved_at", "")
+        if resolved and resolved > cutoff and item.get("status") != "open":
+            result["resolved_items"] += 1
+
+    return result
+
+
 # Sentinel for project-root mode (one person = one folder).
 # Use this instead of bare empty strings for clarity.
 PROJECT_ROOT: str = ""

@@ -23,6 +23,7 @@ try:
         calendar_export_path,
         care_status_path,
         change_report_path,
+        changes_since_last_session,
         check_medication_allergy_conflicts,
         dossier_path,
         exports_dir,
@@ -35,6 +36,7 @@ try:
         load_snapshot,
         load_vital_entries,
         load_weight_entries,
+        mark_session,
         notes_dir,
         normalize_test_name,
         now_utc,
@@ -71,6 +73,7 @@ except ImportError:
         calendar_export_path,
         care_status_path,
         change_report_path,
+        changes_since_last_session,
         check_medication_allergy_conflicts,
         dossier_path,
         exports_dir,
@@ -83,6 +86,7 @@ except ImportError:
         load_snapshot,
         load_vital_entries,
         load_weight_entries,
+        mark_session,
         notes_dir,
         normalize_test_name,
         now_utc,
@@ -180,7 +184,7 @@ def review_trust_label(item: dict[str, Any]) -> str:
 
 
 def status_chip(ok: bool, positive: str, needs_attention: str) -> str:
-    return positive if ok else needs_attention
+    return f"\u2705 {positive}" if ok else f"\u26a0\ufe0f {needs_attention}"
 
 
 def open_reviews(review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -731,6 +735,51 @@ def render_patterns_text(
     return "\n".join(lines)
 
 
+def _trend_arrow(delta: float) -> str:
+    """Return a Unicode arrow indicating trend direction."""
+    if delta > 0:
+        return "\u2191"
+    elif delta < 0:
+        return "\u2193"
+    return "\u2192"
+
+
+def _range_bar(value: float, ref_low: float, ref_high: float, width: int = 8) -> str:
+    """Render a simple bar showing where value falls relative to reference range."""
+    if ref_high <= ref_low:
+        return ""
+    # Extend range to show out-of-range values
+    span = ref_high - ref_low
+    display_low = ref_low - span * 0.3
+    display_high = ref_high + span * 0.3
+    display_span = display_high - display_low
+    if display_span <= 0:
+        return ""
+    pos = int(((value - display_low) / display_span) * width)
+    pos = max(0, min(width - 1, pos))
+    bar = ["\u2591"] * width  # light shade
+    # Fill from 0 to pos
+    for i in range(pos + 1):
+        bar[i] = "\u2588"  # full block
+    return "".join(bar)
+
+
+def _parse_reference_range(ref: str) -> tuple[float | None, float | None]:
+    """Parse a reference range string like '0-99' or '< 100' into (low, high)."""
+    if not ref:
+        return None, None
+    match = re.match(r"^\s*(\d+\.?\d*)\s*[-\u2013]\s*(\d+\.?\d*)\s*$", ref)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+    match = re.match(r"^\s*<\s*(\d+\.?\d*)\s*$", ref)
+    if match:
+        return 0.0, float(match.group(1))
+    match = re.match(r"^\s*>\s*(\d+\.?\d*)\s*$", ref)
+    if match:
+        return float(match.group(1)), None
+    return None, None
+
+
 def render_trends_text(profile: dict[str, Any]) -> str:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for item in profile.get("recent_tests", []):
@@ -751,32 +800,55 @@ def render_trends_text(profile: dict[str, Any]) -> str:
         latest = series[-1]
         latest_value = parse_numeric_value(latest.get("value"))
         earliest_value = parse_numeric_value(series[0].get("value"))
+
         change = ""
         significance = ""
+        arrow = ""
         if latest_value is not None and earliest_value is not None and len(series) > 1:
             delta = latest_value - earliest_value
             change = f" | change {delta:+.2f}"
+            arrow = f" {_trend_arrow(delta)}"
             threshold = TREND_THRESHOLDS.get(name, 0.0)
             if threshold and abs(delta) >= threshold:
                 significance = " | notable trend"
+
         unit = latest.get("unit", "")
         unit_suffix = f" {unit}" if unit else ""
         lines.append(f"## {name}")
         lines.append(
-            f"- Latest: {latest.get('value')}{unit_suffix} on {latest.get('date') or 'unknown'}"
+            f"- Latest: **{latest.get('value')}{unit_suffix}** on {latest.get('date') or 'unknown'}"
             f"{change}{significance}"
         )
-        if latest.get("reference_range"):
-            lines.append(f"- Reference range: {latest.get('reference_range')}")
+
+        # Range bar if reference range is available
+        ref_str = latest.get("reference_range", "")
+        ref_low, ref_high = _parse_reference_range(str(ref_str))
+        if ref_low is not None and ref_high is not None and latest_value is not None:
+            bar = _range_bar(latest_value, ref_low, ref_high)
+            values_in_series = [parse_numeric_value(i.get("value")) for i in series]
+            values_in_series = [v for v in values_in_series if v is not None]
+            lo = min(values_in_series) if values_in_series else latest_value
+            hi = max(values_in_series) if values_in_series else latest_value
+            lines.append(f"- Range: {bar} ({lo:.0f}-{hi:.0f} out of ref {ref_low:.0f}-{ref_high:.0f})")
+        elif ref_str:
+            lines.append(f"- Reference range: {ref_str}")
+
         if latest.get("flag"):
-            lines.append(f"- Latest flag: {latest.get('flag')}")
-        lines.append(
-            "- Series: "
-            + ", ".join(
-                f"{item.get('date') or 'unknown'}={item.get('value')}{(' ' + item.get('unit')) if item.get('unit') else ''}"
-                for item in series
+            flag = latest.get("flag")
+            flag_icon = "\u26a0\ufe0f" if flag in ("high", "low", "abnormal") else ""
+            lines.append(f"- Latest flag: {flag_icon} {flag}")
+
+        # Trend line with arrows for series with 2+ values
+        if len(series) >= 2:
+            trend_values = " \u2192 ".join(
+                str(item.get("value", "?")) for item in series
             )
-        )
+            lines.append(f"- Trend: {trend_values}{arrow}")
+        else:
+            lines.append(
+                f"- Series: {series[0].get('date', 'unknown')}={series[0].get('value')}"
+                f"{(' ' + series[0].get('unit')) if series[0].get('unit') else ''}"
+            )
         lines.append("")
     return "\n".join(lines)
 
@@ -876,8 +948,32 @@ def render_calendar_ics(profile: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _sparkline(values: list[float], width: int = 7) -> str:
+    """Render a Unicode sparkline from a list of numeric values."""
+    if not values or len(values) < 2:
+        return ""
+    blocks = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+    lo = min(values)
+    hi = max(values)
+    span = hi - lo
+    if span == 0:
+        return blocks[3] * min(len(values), width)
+    # Resample to width if needed
+    if len(values) > width:
+        step = len(values) / width
+        sampled = [values[int(i * step)] for i in range(width)]
+    else:
+        sampled = values
+    result = []
+    for v in sampled:
+        idx = int(((v - lo) / span) * (len(blocks) - 1))
+        idx = max(0, min(len(blocks) - 1, idx))
+        result.append(blocks[idx])
+    return "".join(result)
+
+
 def render_weight_trends_text(entries: list[dict[str, Any]]) -> str:
-    lines = ["# Weight Trends", ""]
+    lines = ["# Weight Trend", ""]
     if not entries:
         lines.append("No weight entries yet.")
         lines.append("")
@@ -885,13 +981,22 @@ def render_weight_trends_text(entries: list[dict[str, Any]]) -> str:
 
     latest = entries[-1]
     lines.append(
-        f"- Latest: {latest['value']} {latest['unit']} on {latest['entry_date']}"
+        f"- Latest: **{latest['value']} {latest['unit']}** ({latest['entry_date']})"
     )
     if len(entries) > 1:
-        delta = latest["value"] - entries[0]["value"]
+        first_val = entries[0]["value"]
+        latest_val = latest["value"]
+        delta = latest_val - first_val
+        pct = ((delta / first_val) * 100) if first_val else 0
+        arrow = _trend_arrow(delta)
         lines.append(
-            f"- Change from first entry: {delta:+.2f} {latest['unit']}"
+            f"- Change: {first_val} \u2192 {latest_val} ({pct:+.1f}%) {arrow}"
         )
+        # Sparkline
+        values = [e["value"] for e in entries if e.get("value") is not None]
+        spark = _sparkline(values)
+        if spark:
+            lines.append(f"- Trend: {spark}")
     lines.append("")
     lines.append("## Series")
     lines.extend(
@@ -901,6 +1006,19 @@ def render_weight_trends_text(entries: list[dict[str, Any]]) -> str:
     )
     lines.append("")
     return "\n".join(lines)
+
+
+def _bp_status_icon(systolic: int | None, diastolic: int | None) -> str:
+    """Return a status icon for blood pressure reading."""
+    if systolic is None or diastolic is None:
+        return ""
+    if systolic < 120 and diastolic < 80:
+        return "\u2705"
+    if systolic < 130 and diastolic < 85:
+        return "\u2705"
+    if systolic < 140 and diastolic < 90:
+        return "\u26a0\ufe0f"
+    return "\u274c"
 
 
 def render_vitals_trends_text(entries: list[dict[str, Any]]) -> str:
@@ -915,11 +1033,44 @@ def render_vitals_trends_text(entries: list[dict[str, Any]]) -> str:
         grouped.setdefault(item["metric"], []).append(item)
 
     for metric in sorted(grouped):
-        lines.append(f"## {metric.replace('_', ' ').title()}")
-        for item in grouped[metric][-10:]:
-            unit = f" {item['unit']}" if item.get("unit") else ""
-            note = f" | {item['note']}" if item.get("note") else ""
-            lines.append(f"- {item['entry_date']} | {item['value_text']}{unit}{note}")
+        metric_entries = grouped[metric]
+        display_name = metric.replace("_", " ").title()
+        latest = metric_entries[-1]
+        unit = f" {latest['unit']}" if latest.get("unit") else ""
+
+        lines.append(f"## {display_name}")
+
+        # Latest with status indicator
+        if metric == "blood_pressure":
+            sys_val = latest.get("systolic")
+            dia_val = latest.get("diastolic")
+            icon = _bp_status_icon(sys_val, dia_val)
+            lines.append(
+                f"- Latest: **{latest['value_text']}{unit}** {icon} ({latest['entry_date']})"
+            )
+        else:
+            lines.append(
+                f"- Latest: **{latest['value_text']}{unit}** ({latest['entry_date']})"
+            )
+
+        # History trend line for 2+ entries
+        if len(metric_entries) >= 2:
+            history_values = [e["value_text"] for e in metric_entries[-6:]]
+            trend_line = " \u2192 ".join(history_values)
+            # Determine overall direction
+            if metric == "blood_pressure":
+                first_sys = metric_entries[0].get("systolic")
+                last_sys = latest.get("systolic")
+                if first_sys is not None and last_sys is not None:
+                    arrow = _trend_arrow(last_sys - first_sys)
+                    trend_line += f" {arrow}"
+            else:
+                first_num = metric_entries[0].get("numeric_value")
+                last_num = latest.get("numeric_value")
+                if first_num is not None and last_num is not None:
+                    arrow = _trend_arrow(last_num - first_num)
+                    trend_line += f" {arrow}"
+            lines.append(f"- History: {trend_line}")
         lines.append("")
     return "\n".join(lines)
 
@@ -1112,33 +1263,111 @@ def render_change_report_text(
     return "\n".join(lines)
 
 
-def render_start_here_text(profile: dict[str, Any]) -> str:
-    name = profile.get("name") or profile.get("person_id") or "this person"
+def render_session_diff_text(changes: dict[str, Any]) -> str:
+    """Render a human-friendly summary of what changed since the last session."""
+    last = changes.get("last_session")
+    if not last:
+        return ""
+
+    days_ago = changes.get("days_ago")
+    if days_ago is None:
+        return ""
+
+    # Format the time-ago string
+    if days_ago < 1:
+        time_ago = "earlier today"
+    elif days_ago < 2:
+        time_ago = "yesterday"
+    else:
+        time_ago = f"{int(days_ago)} days ago"
+
+    items: list[str] = []
+    new_docs = changes.get("new_documents", 0)
+    new_notes = changes.get("new_notes", 0)
+    new_reviews = changes.get("new_review_items", 0)
+    resolved = changes.get("resolved_items", 0)
+    profile_changes = changes.get("profile_changes", [])
+
+    if new_docs:
+        items.append(f"\U0001f4c4 {new_docs} new document(s) processed")
+    if new_notes:
+        items.append(f"\U0001f4dd {new_notes} new note(s) added")
+    if new_reviews:
+        items.append(f"\u26a0\ufe0f {new_reviews} item(s) need your review")
+    if resolved:
+        items.append(f"\u2705 {resolved} review item(s) resolved")
+    if profile_changes:
+        section_labels = {
+            "recent_tests": "lab results",
+            "medications": "medication list",
+            "conditions": "conditions",
+            "follow_up": "follow-up tasks",
+            "allergies": "allergies",
+            "clinicians": "clinician list",
+            "encounters": "encounters",
+        }
+        changed_labels = [section_labels.get(s, s) for s in profile_changes]
+        items.append(f"\U0001f4ca Updated: {', '.join(changed_labels)}")
+
+    if not items:
+        return ""
+
     lines = [
-        "# Start Here",
-        "",
-        f"This folder is the working health project for {name}. You do not need to open everything.",
-        "",
-        "## Best Order",
-        "- Read HEALTH_HOME.md for the all-in-one view.",
-        "- Read HEALTH_DOSSIER.md for the full current picture.",
-        "- Read TODAY.md if you want the quickest next steps.",
-        "- Read NEXT_APPOINTMENT.md before a visit or portal message.",
-        "- Read REVIEW_WORKLIST.md when the system found new facts that still need confirmation.",
-        "",
-        "## When New Files Arrive",
-        "- Drop them into inbox/.",
-        "- Run process-inbox.",
-        "- The originals will move into Archive/ after ingestion.",
-        "",
-        "## What This Workspace Optimizes For",
-        "- less repetition across Claude sessions",
-        "- cleaner appointment prep",
-        "- clearer follow-up tracking",
-        "- visible trust and conflicts instead of hidden assumptions",
+        f"## Since Your Last Session ({time_ago})",
+    ]
+    lines.extend(f"- {item}" for item in items)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_start_here_text(
+    profile: dict[str, Any],
+    inbox_files: list[Path] | None = None,
+    review_queue: list[dict[str, Any]] | None = None,
+    conflicts: list[dict[str, Any]] | None = None,
+    session_changes: dict[str, Any] | None = None,
+) -> str:
+    name = profile.get("name") or profile.get("person_id") or "this person"
+    inbox_files = inbox_files or []
+    review_queue = review_queue or []
+    conflicts = conflicts or []
+    open_review_items = open_reviews(review_queue)
+    nf = next_follow_up(profile)
+
+    lines = [
+        f"# {name}",
         "",
     ]
+
+    # Session diff if available
+    if session_changes:
+        diff_text = render_session_diff_text(session_changes)
+        if diff_text:
+            lines.append(diff_text)
+
+    # Actionable status lines
+    action_lines: list[str] = []
+    if inbox_files:
+        action_lines.append(f"You have **{len(inbox_files)}** file(s) in inbox.")
+    if open_review_items:
+        action_lines.append(f"**{len(open_review_items)}** item(s) need your review.")
+    if nf:
+        action_lines.append(f"Next follow-up: **{nf.get('task')}** on {nf.get('due_date', 'unknown')}.")
+    due_now = due_follow_ups(profile, days=0)
+    if due_now:
+        action_lines.append(f"**{len(due_now)}** follow-up(s) are overdue.")
+
+    if action_lines:
+        lines.extend(f"- {item}" for item in action_lines[:3])
+    else:
+        lines.append("Everything looks good. No urgent actions right now.")
+    lines.append("")
+    lines.append("Open TODAY.md for today's priorities, or HEALTH_HOME.md for the full picture.")
+    lines.append("")
     return "\n".join(lines)
+
+
+_SECTION_DIVIDER = "\u2500" * 40
 
 
 def render_health_home_text(
@@ -1153,6 +1382,18 @@ def render_health_home_text(
     next_item = next_follow_up(profile)
     pattern_insights = build_pattern_insights(profile, medication_history, weight_entries, vital_entries)
     stale = staleness_warning(profile)
+    open_review_items = open_reviews(review_queue)
+    open_conflict_items = open_conflicts_only(conflicts)
+
+    # Status bar at top
+    inbox_chip = status_chip(not inbox_files, "Inbox clear", f"{len(inbox_files)} file(s) in inbox")
+    review_chip = status_chip(not open_review_items, "No items need review", f"{len(open_review_items)} items need review")
+    followup_chip = status_chip(
+        not due_follow_ups(profile, days=0),
+        "No overdue follow-ups",
+        f"{len(due_follow_ups(profile, days=0))} overdue follow-ups",
+    )
+
     lines = [
         "# Health Home",
         "",
@@ -1161,49 +1402,92 @@ def render_health_home_text(
         lines.append(f"> {stale}")
         lines.append("")
     lines.extend([
+        f"{inbox_chip} | {review_chip} | {followup_chip}",
+        "",
+        _SECTION_DIVIDER,
+        "",
         "This is the calmest place to start if you just want to know what matters now.",
         "",
         "## Right Now",
     ])
     lines.extend(f"- {item}" for item in current_priorities(profile, conflicts, inbox_files, review_queue))
-    lines.extend(
-        [
-            "",
-            "## Snapshot",
-            f"- Person: {profile.get('name') or profile.get('person_id') or 'unknown'}",
-            f"- Latest weight: {latest_weight_summary(weight_entries)}",
-            f"- Next recorded follow-up: {render_record(next_item, ('task', 'due_date', 'status')) if next_item else 'none recorded'}",
-            f"- Open review items: {len(open_reviews(review_queue))}",
-            f"- Open conflicts: {len(open_conflicts_only(conflicts))}",
-            "",
-            "## Recent Signal",
-        ]
-    )
+    lines.extend([
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Snapshot",
+        f"- Person: **{profile.get('name') or profile.get('person_id') or 'unknown'}**",
+        f"- Latest weight: **{latest_weight_summary(weight_entries)}**",
+        f"- Next follow-up: {render_record(next_item, ('task', 'due_date', 'status')) if next_item else 'none recorded'}",
+        f"- Open review items: **{len(open_review_items)}**",
+        f"- Open conflicts: **{len(open_conflict_items)}**",
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Recent Signal",
+    ])
     abnormal = recent_abnormal_tests(profile, limit=3)
     if abnormal:
         lines.extend(
-            f"- {item.get('name')} {item.get('value')} {item.get('unit', '')} | {item.get('flag') or 'flag not recorded'} | trust: {source_trust_label(item.get('source'))}"
+            f"- \u26a0\ufe0f **{item.get('name')}** {item.get('value')} {item.get('unit', '')} ({item.get('flag') or '?'}) | trust: {source_trust_label(item.get('source'))}"
             for item in abnormal
         )
     else:
-        lines.append("- No abnormal lab flags are currently highlighted.")
-    lines.extend(["", "## Connected Patterns"])
+        lines.append("- \u2705 No abnormal lab flags are currently highlighted.")
+    lines.extend([
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Connected Patterns",
+    ])
     if pattern_insights:
         lines.extend(f"- {item}" for item in pattern_insights[:4])
     else:
         lines.append("- No strong cross-record patterns are obvious yet.")
-    lines.extend(["", "## Progress"])
+    lines.extend([
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Progress",
+    ])
     lines.extend(f"- {item}" for item in care_success_markers(profile, conflicts, inbox_files, review_queue))
-    lines.extend(["", "## Metrics Being Tracked"])
+    lines.extend([
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Metrics Being Tracked",
+    ])
     tracked = {"weight"} | {item["metric"] for item in vital_entries}
     lines.append("- " + ", ".join(sorted(metric.replace("_", " ") for metric in tracked if metric)))
     lines.append("")
     return "\n".join(lines)
 
 
+def _review_item_label(item: dict[str, Any]) -> str:
+    """Format a review item's candidate into a bold, readable label."""
+    candidate = item.get("candidate", {})
+    section = item.get("section", "")
+    if section == "recent_tests":
+        name = candidate.get("name", "?")
+        value = candidate.get("value", "?")
+        unit = candidate.get("unit", "")
+        return f"{name}: {value} {unit}".strip()
+    if section == "medications":
+        name = candidate.get("name", "?")
+        dose = candidate.get("dose", "")
+        return f"{name} {dose}".strip()
+    if section == "conditions":
+        return candidate.get("name", "?")
+    if section == "allergies":
+        return candidate.get("substance", "?")
+    if section == "follow_up":
+        return candidate.get("task", "?")
+    return render_record(candidate, ("name", "value", "dose", "task"))
+
+
 def render_review_worklist_text(review_queue: list[dict[str, Any]]) -> str:
     open_items = open_reviews(review_queue)
-    tier_groups = {
+    tier_groups: dict[str, list[dict[str, Any]]] = {
         "safe_to_auto_apply": [],
         "needs_quick_confirmation": [],
         "do_not_trust_without_human_review": [],
@@ -1214,52 +1498,87 @@ def render_review_worklist_text(review_queue: list[dict[str, Any]]) -> str:
     lines = [
         "# Review Worklist",
         "",
-        "This file is meant to feel lighter than reading the raw JSON queue.",
-        "",
-        f"- Open review items: {len(open_items)}",
+        f"**{len(open_items)}** item(s) waiting for your review.",
         "",
     ]
     if not open_items:
-        lines.extend(
-            [
-                "## Good News",
-                "- Nothing is waiting for review right now.",
-                "",
-            ]
-        )
-        return "\n".join(lines)
-
-    labels = {
-        "safe_to_auto_apply": "Probably Safe To Accept",
-        "needs_quick_confirmation": "Quick Confirmation Recommended",
-        "do_not_trust_without_human_review": "Needs Careful Human Review",
-    }
-    for tier in ("safe_to_auto_apply", "needs_quick_confirmation", "do_not_trust_without_human_review"):
-        lines.append(f"## {labels[tier]}")
-        if tier_groups.get(tier):
-            for item in tier_groups[tier]:
-                lines.append(
-                    f"- {item['id']} | {item['section']} | "
-                    f"{render_record(item['candidate'], ('name', 'value', 'dose', 'task'))} | "
-                    f"{review_trust_label(item)} | source {item.get('source_title') or 'unknown'}"
-                )
-                if item.get("applied"):
-                    lines.append("  Added to the structured record already, but still worth a quick glance.")
-                snippet = review_source_snippet(item)
-                if snippet:
-                    lines.append(f"  Evidence: {snippet}")
-        else:
-            lines.append("- none recorded")
-        lines.append("")
-    lines.extend(
-        [
-            "## Suggested Flow",
-            "- Accept the safe items first.",
-            "- Quick-check the medium-confidence items against the source document.",
-            "- Leave low-trust OCR or ambiguous items unresolved until a human confirms them.",
+        lines = [
+            "# Review Worklist",
+            "",
+            "\u2705 Nothing is waiting for review right now. You're all caught up.",
             "",
         ]
-    )
+        return "\n".join(lines)
+
+    # Tier 1: Safe to accept
+    safe = tier_groups.get("safe_to_auto_apply", [])
+    if safe:
+        lines.extend([
+            _SECTION_DIVIDER,
+            "",
+            "## Items I'm Confident About",
+            "",
+            "These were extracted from your documents and look reliable. You can accept them all at once.",
+            "",
+        ])
+        for idx, item in enumerate(safe, 1):
+            label = _review_item_label(item)
+            confidence = item.get("confidence", "high")
+            source = item.get("source_title") or "unknown source"
+            lines.append(f"{idx}. **{label}** (from \"{source}\", {confidence} confidence)")
+            snippet = review_source_snippet(item)
+            if snippet:
+                lines.append(f"   Source line: \"{snippet}\"")
+            lines.append(f"   \u2192 \u2610 Accept  \u2610 Skip")
+            if item.get("applied"):
+                lines.append("   *Already added to the record, but still worth a quick glance.*")
+            lines.append("")
+
+    # Tier 2: Needs confirmation
+    medium = tier_groups.get("needs_quick_confirmation", [])
+    if medium:
+        lines.extend([
+            _SECTION_DIVIDER,
+            "",
+            "## Items That Need Your Eye",
+            "",
+            "These were extracted but I'm less sure. Please check against the original document.",
+            "",
+        ])
+        for idx, item in enumerate(medium, 1):
+            label = _review_item_label(item)
+            confidence = item.get("confidence", "medium")
+            source = item.get("source_title") or "unknown source"
+            lines.append(f"{idx}. **{label}** (from \"{source}\", {confidence} confidence)")
+            snippet = review_source_snippet(item)
+            if snippet:
+                lines.append(f"   Source line: \"{snippet}\"")
+            lines.append(f"   \u2192 \u2610 Accept  \u2610 Reject  \u2610 Not sure")
+            lines.append("")
+
+    # Tier 3: Do not trust
+    cautious = tier_groups.get("do_not_trust_without_human_review", [])
+    if cautious:
+        lines.extend([
+            _SECTION_DIVIDER,
+            "",
+            "## Items I Wouldn't Trust Without Checking",
+            "",
+            "These came from OCR or ambiguous text. Only accept if you can verify against the original.",
+            "",
+        ])
+        for idx, item in enumerate(cautious, 1):
+            label = _review_item_label(item)
+            confidence = item.get("confidence", "low")
+            source = item.get("source_title") or "unknown source"
+            lines.append(f"{idx}. **{label}** (from \"{source}\", {confidence} confidence)")
+            snippet = review_source_snippet(item)
+            if snippet:
+                lines.append(f"   Source line: \"{snippet}\"")
+            lines.append(f"   \u2192 \u2610 Accept  \u2610 Reject  \u2610 Not sure")
+            lines.append("")
+
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1320,10 +1639,22 @@ def render_today_text(
 ) -> str:
     due_now = due_follow_ups(profile, days=0)
     stale = staleness_warning(profile)
+    open_review_items = open_reviews(review_queue)
+    open_conflict_items = open_conflicts_only(conflicts)
+
+    # Status bar
+    inbox_chip = status_chip(not inbox_files, "Inbox clear", f"{len(inbox_files)} in inbox")
+    review_chip = status_chip(not open_review_items, "Reviews done", f"{len(open_review_items)} to review")
+    overdue_chip = status_chip(not due_now, "Nothing overdue", f"{len(due_now)} overdue")
+
     lines = [
         "# Today",
         "",
+        f"{inbox_chip} | {review_chip} | {overdue_chip}",
+        "",
         "You do not need to solve everything today. Focus on the smallest set of actions that keeps the record reliable and the next step clear.",
+        "",
+        _SECTION_DIVIDER,
         "",
         "## Focus Now",
     ]
@@ -1331,23 +1662,33 @@ def render_today_text(
     if stale:
         priorities.append("Consider adding recent labs or visit notes.")
     lines.extend(f"- {item}" for item in priorities)
-    lines.extend(["", "## Actionable Today"])
+    lines.extend([
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Action Items",
+    ])
     actionable = []
     if inbox_files:
-        actionable.append(f"Process inbox to handle {len(inbox_files)} waiting file(s).")
+        actionable.append(f"\u2610 Process inbox ({len(inbox_files)} waiting file(s))")
     if due_now:
         actionable.extend(
-            f"Follow up on: {item.get('task')} ({item.get('due_date') or 'no date'})"
+            f"\u2610 Follow up: {item.get('task')} (due {item.get('due_date') or 'no date'})"
             for item in due_now[:5]
         )
-    if open_reviews(review_queue):
-        actionable.append(f"Review {len(open_reviews(review_queue))} extracted item(s).")
-    if open_conflicts_only(conflicts):
-        actionable.append(f"Resolve {len(open_conflicts_only(conflicts))} source conflict(s).")
+    if open_review_items:
+        actionable.append(f"\u2610 Review {len(open_review_items)} extracted item(s)")
+    if open_conflict_items:
+        actionable.append(f"\u2610 Resolve {len(open_conflict_items)} source conflict(s)")
     if not actionable:
-        actionable.append("No urgent workspace maintenance is needed today.")
+        actionable.append("\u2705 No urgent workspace maintenance is needed today.")
     lines.extend(f"- {item}" for item in actionable)
-    lines.extend(["", "## Quick Reassurance"])
+    lines.extend([
+        "",
+        _SECTION_DIVIDER,
+        "",
+        "## Quick Reassurance",
+    ])
     lines.extend(f"- {item}" for item in care_success_markers(profile, conflicts, inbox_files, review_queue))
     lines.append("")
     return "\n".join(lines)
@@ -1397,27 +1738,34 @@ def _build_appointment_portal_message(
     review_queue: list[dict[str, Any]],
     next_item: dict[str, Any] | None,
 ) -> str:
-    """Build a specific, data-driven portal message for the appointment view."""
-    task = next_item.get("task") if next_item else "the next visit"
-    parts: list[str] = [f"Hello, I am following up about {task}."]
-    # Include 1-2 concrete recent numbers
+    """Build a specific, conversational portal message for the appointment view."""
+    task = next_item.get("task") if next_item else "my upcoming visit"
+    parts: list[str] = [f"Hi, I'm writing about {task}."]
+    # Include 1-2 concrete recent numbers in natural language
     abnormal = recent_abnormal_tests(profile, limit=2)
     if abnormal:
-        nums = "; ".join(
-            f"{t.get('name')} {t.get('value')} {t.get('unit', '')}".strip()
-            for t in abnormal
-        )
-        parts.append(f"Recent notable results: {nums}.")
+        for t in abnormal[:2]:
+            name = t.get("name", "test")
+            value = t.get("value", "?")
+            unit = t.get("unit", "")
+            flag = t.get("flag", "")
+            flag_note = f", which was flagged {flag}" if flag else ""
+            parts.append(f"My recent {name} was {value} {unit}{flag_note}.".strip())
     elif latest_recent_tests(profile, limit=1):
         t = latest_recent_tests(profile, limit=1)[0]
         parts.append(
-            f"Most recent test: {t.get('name')} {t.get('value')} {t.get('unit', '')} on {t.get('date', '')}.".strip()
+            f"My most recent {t.get('name', 'test')} was {t.get('value', '?')} {t.get('unit', '')} on {t.get('date', '')}.".strip()
         )
-    # Add the top question
+    # Add a conversational question
     questions = suggested_visit_questions(profile)
     if questions:
-        parts.append(f"My main question: {questions[0]}")
-    parts.append("Thank you.")
+        q = questions[0]
+        # Make it first-person
+        if q.startswith("What does"):
+            q = "Should we discuss " + q[len("What does "):].rstrip("?") + "?"
+        elif q.startswith("What should"):
+            q = q  # already natural
+        parts.append(q)
     return "- " + " ".join(parts)
 
 
@@ -1817,32 +2165,37 @@ def render_clinician_packet_text(profile: dict[str, Any], visit_type: str, reaso
 
 def render_portal_message_text(profile: dict[str, Any], message_goal: str) -> str:
     # Pick 1-2 most relevant recent numbers
-    relevant_numbers: list[str] = []
     abnormal = recent_abnormal_tests(profile, limit=3)
+    latest = latest_recent_tests(profile, limit=2)
+
+    # Build specific, conversational number references
+    number_parts: list[str] = []
     if abnormal:
         for t in abnormal[:2]:
-            relevant_numbers.append(
-                f"{t.get('name')} {t.get('value')} {t.get('unit', '')} ({t.get('date', '')})".strip()
-            )
-    if not relevant_numbers:
-        latest = latest_recent_tests(profile, limit=2)
-        for t in latest[:2]:
-            relevant_numbers.append(
-                f"{t.get('name')} {t.get('value')} {t.get('unit', '')} ({t.get('date', '')})".strip()
-            )
+            name = t.get("name", "test")
+            value = t.get("value", "?")
+            unit = t.get("unit", "")
+            flag = t.get("flag", "")
+            flag_note = f", which was flagged {flag}" if flag else ""
+            number_parts.append(f"my recent {name} was {value} {unit}{flag_note}".strip())
+    elif latest:
+        t = latest[0]
+        number_parts.append(
+            f"my most recent {t.get('name', 'test')} was {t.get('value', '?')} {t.get('unit', '')} on {t.get('date', '')}".strip()
+        )
 
-    # Pick the single most important question
+    # Pick the single most important question and make it conversational
     questions = suggested_visit_questions(profile)
     top_question = questions[0] if questions else "What should I watch for before the next visit?"
+    # Convert question to first-person if it starts with "What does..."
+    if top_question.startswith("What does"):
+        top_question = top_question.replace("What does the recent", "I'd like to understand what my recent")
 
-    # Build a concise <100 word message
-    parts: list[str] = [
-        f"Hello, I am writing about {message_goal}.",
-    ]
-    if relevant_numbers:
-        parts.append(f"Recent results: {'; '.join(relevant_numbers)}.")
-    parts.append(f"My main question: {top_question}")
-    parts.append("Thank you for any guidance.")
+    # Build a natural, first-person message under 80 words
+    parts: list[str] = [f"Hi, I'm writing about {message_goal}."]
+    if number_parts:
+        parts.append(f"For context, {'; '.join(number_parts)}.")
+    parts.append(top_question)
 
     message_body = " ".join(parts)
 
@@ -2040,7 +2393,18 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
             medication_history,
         ),
     )
-    atomic_write_text(start_here_path(root, person_id), render_start_here_text(profile))
+    session_changes = changes_since_last_session(root, person_id)
+    atomic_write_text(
+        start_here_path(root, person_id),
+        render_start_here_text(
+            profile,
+            inbox_files=inbox_files,
+            review_queue=review_queue,
+            conflicts=conflicts,
+            session_changes=session_changes,
+        ),
+    )
+    mark_session(root, person_id)
     atomic_write_text(
         today_path(root, person_id),
         render_today_text(profile, conflicts, inbox_files, review_queue),

@@ -422,7 +422,7 @@ class CareWorkspaceTests(unittest.TestCase):
         self.assertIn("Connected Patterns", home_text)
         self.assertIn("Health Patterns", patterns_text)
         self.assertIn("Focus Now", today_text)
-        self.assertIn("Probably Safe To Accept", review_text)
+        self.assertIn("Items I'm Confident About", review_text)
         self.assertIn("Care Status", status_text)
 
     def test_next_appointment_and_preferences_surface_in_views(self) -> None:

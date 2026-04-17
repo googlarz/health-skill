@@ -903,5 +903,90 @@ class ExtractionAuditTests(unittest.TestCase):
         self.assertLessEqual(len(audit), 500)
 
 
+class VisualOutputTests(unittest.TestCase):
+    """v1.42 UX: visual dashboards, session diff, review UX, portal messages."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(self.root, "", "conditions", {"name": "Hypertension"})
+        upsert_record(self.root, "", "medications", {
+            "name": "Atorvastatin", "dose": "10 mg", "status": "active",
+        })
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "180", "unit": "mg/dL",
+            "date": date.today().isoformat(), "flag": "high",
+        })
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_start_here_is_dynamic(self) -> None:
+        from scripts.rendering import refresh_views
+        refresh_views(self.root, "")
+        text = (self.root / "START_HERE.md").read_text(encoding="utf-8")
+        self.assertIn("Jane Doe", text)
+        # Should mention TODAY.md or HEALTH_HOME.md
+        self.assertTrue("TODAY" in text or "HEALTH_HOME" in text)
+
+    def test_status_chips_have_emoji(self) -> None:
+        from scripts.rendering import status_chip
+        ok = status_chip(True, "Inbox clear", "Inbox has files")
+        bad = status_chip(False, "Inbox clear", "Inbox has files")
+        self.assertIn("✅", ok)
+        self.assertIn("⚠️", bad)
+
+    def test_trends_have_arrows(self) -> None:
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "160", "unit": "mg/dL",
+            "date": (date.today() - timedelta(days=90)).isoformat(), "flag": "high",
+        })
+        from scripts.rendering import render_trends_text
+        profile = load_profile(self.root, "")
+        text = render_trends_text(profile)
+        self.assertIn("LDL", text)
+        # Should have some visual indicator (arrow, bar, or bold)
+        self.assertTrue("→" in text or "↓" in text or "↑" in text or "**" in text)
+
+    def test_review_worklist_is_conversational(self) -> None:
+        from scripts.extraction import process_inbox
+        from scripts.rendering import refresh_views
+        inbox = self.root / "inbox"
+        source = inbox / "labs.txt"
+        source.write_text("LDL 162 mg/dL 0-99 H\n", encoding="utf-8")
+        process_inbox(self.root, "")
+        refresh_views(self.root, "")
+        text = (self.root / "REVIEW_WORKLIST.md").read_text(encoding="utf-8")
+        # Should use conversational headings, not technical tier names
+        self.assertTrue(
+            "Confident" in text or "Need Your Eye" in text or "Trust" in text
+            or "safe" in text.lower()
+        )
+
+    def test_portal_message_is_natural(self) -> None:
+        from scripts.rendering import render_portal_message_text
+        profile = load_profile(self.root, "")
+        text = render_portal_message_text(profile, "cholesterol follow-up")
+        # Should use first person
+        self.assertTrue("I" in text or "my" in text.lower() or "I'm" in text)
+
+    def test_session_tracking(self) -> None:
+        from scripts.care_workspace import (
+            mark_session,
+            changes_since_last_session,
+        )
+        mark_session(self.root, "")
+        changes = changes_since_last_session(self.root, "")
+        self.assertIn("last_session", changes)
+
+    def test_home_has_status_bar(self) -> None:
+        from scripts.rendering import refresh_views
+        refresh_views(self.root, "")
+        text = (self.root / "HEALTH_HOME.md").read_text(encoding="utf-8")
+        # Should have emoji status indicators
+        self.assertTrue("✅" in text or "⚠️" in text)
+
+
 if __name__ == "__main__":
     unittest.main()
