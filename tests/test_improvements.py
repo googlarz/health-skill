@@ -560,13 +560,13 @@ class DashboardCacheTests(unittest.TestCase):
         save_dashboard_to_cache(
             self.root, "", "cholesterol labs", "lab_review", ["lab_review"], "# Labs\n",
         )
-        # Simulate profile being updated after cache was created
-        # by backdating the cache entry's profile_updated_at
+        # Simulate a health-critical profile change by altering the fingerprint
+        # in the cache entry to something that won't match the current profile.
         cache = load_dashboard_cache(self.root, "")
-        cache[-1]["profile_updated_at"] = "2026-01-01T00:00:00+00:00"
+        cache[-1]["health_fingerprint"] = "stale_fingerprint_does_not_match"
         save_dashboard_cache(self.root, "", cache)
 
-        # Now the profile's updated_at is newer than the cached profile_updated_at
+        # Now the health fingerprint differs, so the cache should be invalidated
         cached = find_cached_dashboard(self.root, "", "cholesterol labs", "lab_review")
         self.assertIsNone(cached)
 
@@ -637,6 +637,167 @@ class PersonAwareTests(unittest.TestCase):
             ["Jane Doe", "John Doe"],
         )
         self.assertIsNone(result)
+
+
+class MedAllergyConflictTests(unittest.TestCase):
+    """Item 2: Medication-allergy cross-validation."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_amoxicillin_with_penicillin_allergy_creates_conflict(self) -> None:
+        from scripts.care_workspace import check_medication_allergy_conflicts
+        upsert_record(self.root, "", "allergies", {"substance": "penicillin", "reaction": "rash", "severity": "severe"})
+        upsert_record(self.root, "", "medications", {"name": "Amoxicillin", "dose": "500 mg", "status": "active"})
+        profile = load_profile(self.root, "")
+        conflicts = check_medication_allergy_conflicts(profile)
+        self.assertGreaterEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["risk"], "high")
+
+    def test_unrelated_medication_no_conflict(self) -> None:
+        from scripts.care_workspace import check_medication_allergy_conflicts
+        upsert_record(self.root, "", "allergies", {"substance": "penicillin", "reaction": "rash"})
+        upsert_record(self.root, "", "medications", {"name": "Metformin", "dose": "500 mg", "status": "active"})
+        profile = load_profile(self.root, "")
+        conflicts = check_medication_allergy_conflicts(profile)
+        self.assertEqual(len(conflicts), 0)
+
+    def test_check_returns_correct_structure(self) -> None:
+        from scripts.care_workspace import check_medication_allergy_conflicts
+        upsert_record(self.root, "", "allergies", {"substance": "penicillin", "reaction": "rash"})
+        upsert_record(self.root, "", "medications", {"name": "Amoxicillin", "dose": "500 mg", "status": "active"})
+        profile = load_profile(self.root, "")
+        conflicts = check_medication_allergy_conflicts(profile)
+        self.assertGreaterEqual(len(conflicts), 1)
+        c = conflicts[0]
+        self.assertIn("medication", c)
+        self.assertIn("allergy", c)
+        self.assertIn("risk", c)
+        self.assertIn("reason", c)
+
+
+class ClinicianHandoffTests(unittest.TestCase):
+    """Item 1: Enhanced clinician handoff."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(self.root, "", "allergies", {"substance": "penicillin", "reaction": "rash", "severity": "severe"})
+        upsert_record(self.root, "", "conditions", {"name": "Hypertension"})
+        upsert_record(self.root, "", "medications", {"name": "Lisinopril", "dose": "10 mg", "status": "active"})
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_handoff_includes_allergy_section(self) -> None:
+        profile = load_profile(self.root, "")
+        packet = render_clinician_packet_text(profile, "specialist", "Follow-up visit")
+        self.assertIn("Allergies", packet)
+        self.assertIn("penicillin", packet.lower())
+
+    def test_handoff_includes_summary(self) -> None:
+        profile = load_profile(self.root, "")
+        packet = render_clinician_packet_text(profile, "specialist", "Follow-up visit")
+        self.assertIn("30-Second Summary", packet)
+
+
+class CacheFingerprinting(unittest.TestCase):
+    """Item 5: Cache invalidation by health fingerprint."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(self.root, "", "conditions", {"name": "Hypertension"})
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_preference_change_does_not_invalidate_cache(self) -> None:
+        from scripts.care_workspace import (
+            find_cached_dashboard,
+            save_dashboard_to_cache,
+        )
+        save_dashboard_to_cache(
+            self.root, "", "blood pressure status", "weight_vitals",
+            ["weight_vitals"], "# Vitals\nBP 128/82\n",
+        )
+        # Change a preference (non-health-critical)
+        profile = load_profile(self.root, "")
+        profile["preferences"]["summary_style"] = "detailed"
+        save_profile(self.root, "", profile)
+
+        cached = find_cached_dashboard(self.root, "", "blood pressure status", "weight_vitals")
+        self.assertIsNotNone(cached)
+
+    def test_medication_change_invalidates_cache(self) -> None:
+        from scripts.care_workspace import (
+            find_cached_dashboard,
+            save_dashboard_to_cache,
+        )
+        save_dashboard_to_cache(
+            self.root, "", "medication review", "medication_review",
+            ["medication_review"], "# Meds\n",
+        )
+        # Add a medication (health-critical change)
+        upsert_record(self.root, "", "medications", {"name": "Atorvastatin", "dose": "10 mg", "status": "active"})
+
+        cached = find_cached_dashboard(self.root, "", "medication review", "medication_review")
+        self.assertIsNone(cached)
+
+
+class NewIntentTests(unittest.TestCase):
+    """Item 7: New intent categories."""
+
+    def test_reconcile_query_matches_medication_reconciliation(self) -> None:
+        from scripts.rendering import classify_query_intent
+        intent = classify_query_intent("reconcile my medication list")
+        self.assertIn(intent, ("medication_reconciliation", "medication_review"))
+
+    def test_side_effect_query_matches(self) -> None:
+        from scripts.rendering import classify_query_intent
+        intent = classify_query_intent("I have muscle pain since starting statin")
+        self.assertEqual(intent, "side_effect_check")
+
+
+class ErrorIsolationTests(unittest.TestCase):
+    """Item 11: Caregiver dashboard error isolation."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_corrupted_profile_does_not_crash(self) -> None:
+        from scripts.caregiver_dashboard import collect_project_rows
+        # Create a valid project
+        good = self.root / "good-person"
+        good.mkdir()
+        (good / "HEALTH_PROFILE.json").write_text(json.dumps({
+            "name": "Good Person", "schema_version": 4,
+            "conditions": [], "medications": [], "allergies": [],
+            "clinicians": [], "recent_tests": [], "care_goals": [],
+            "follow_up": [], "unresolved_questions": [], "documents": [],
+            "encounters": [], "preferences": {}, "consents": {},
+            "audit": {"updated_at": "2026-01-01T00:00:00+00:00"},
+        }), encoding="utf-8")
+        # Create a corrupted project
+        bad = self.root / "bad-person"
+        bad.mkdir()
+        (bad / "HEALTH_PROFILE.json").write_text("NOT VALID JSON{{{", encoding="utf-8")
+
+        rows = collect_project_rows(self.root)
+        # Should still return the good project, not crash
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "Good Person")
 
 
 if __name__ == "__main__":

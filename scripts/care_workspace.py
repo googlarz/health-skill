@@ -999,6 +999,27 @@ def upsert_record(
                 record["source"],
             )
 
+    # Medication-allergy safety check (#Item 2)
+    if section == "medications":
+        med_allergy_conflicts = check_medication_allergy_conflicts(profile)
+        for mac in med_allergy_conflicts:
+            # Only warn for the medication being added/updated
+            if mac["medication"].strip().lower() == str(record.get("name", "")).strip().lower():
+                print(
+                    f"[SAFETY WARNING] Medication-allergy conflict: {mac['medication']} vs allergy "
+                    f"'{mac['allergy']}' (risk: {mac['risk']}). {mac['reason']}"
+                )
+                create_conflict(
+                    root,
+                    person_id,
+                    "medications",
+                    identity,
+                    "allergy_conflict",
+                    mac["allergy"],
+                    mac["medication"],
+                    record["source"],
+                )
+
     sync_conflict_count(root, person_id, profile)
     sync_review_count(root, person_id, profile)
     path = save_profile(root, person_id, profile)
@@ -1143,15 +1164,37 @@ DASHBOARD_CACHE_MAX_AGE_HOURS = 24
 def load_dashboard_cache(root: Path, person_id: str) -> list[dict[str, Any]]:
     path = dashboard_cache_path(root, person_id)
     if not path.exists():
+        # Try the backup file if the main file doesn't exist
+        bak_path = path.with_suffix(path.suffix + ".bak")
+        if bak_path.exists():
+            try:
+                return json.loads(bak_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return []
         return []
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
+        # Main file is corrupted; try the backup
+        bak_path = path.with_suffix(path.suffix + ".bak")
+        if bak_path.exists():
+            try:
+                return json.loads(bak_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return []
         return []
 
 
 def save_dashboard_cache(root: Path, person_id: str, cache: list[dict[str, Any]]) -> None:
-    atomic_write_text(dashboard_cache_path(root, person_id), json.dumps(cache, indent=2) + "\n")
+    path = dashboard_cache_path(root, person_id)
+    # Save a .bak backup of the existing file before writing
+    if path.exists():
+        bak_path = path.with_suffix(path.suffix + ".bak")
+        try:
+            shutil.copy2(path, bak_path)
+        except OSError:
+            pass  # Best-effort backup
+    atomic_write_text(path, json.dumps(cache, indent=2) + "\n")
 
 
 def _query_keywords(query: str) -> set[str]:
@@ -1167,13 +1210,41 @@ def _query_keywords(query: str) -> set[str]:
     return words - stop_words
 
 
+MEDICAL_TERMS: set[str] = {
+    # Lab names
+    "ldl", "hdl", "a1c", "hba1c", "tsh", "bun", "alt", "ast", "creatinine",
+    "hemoglobin", "glucose", "cholesterol", "triglycerides", "potassium",
+    "sodium", "calcium", "iron", "ferritin", "psa", "cbc", "lipid",
+    # Medication names
+    "metformin", "atorvastatin", "lisinopril", "amlodipine", "omeprazole",
+    "levothyroxine", "simvastatin", "losartan", "gabapentin", "insulin",
+    # Condition keywords
+    "diabetes", "hypertension", "cholesterol", "thyroid", "anemia",
+    "kidney", "liver", "cardiac", "asthma", "copd",
+}
+
+
 def query_similarity(query_a: str, query_b: str) -> float:
-    """Jaccard similarity between two queries (0.0-1.0)."""
+    """Jaccard similarity between two queries (0.0-1.0), with medical term boost."""
     kw_a = _query_keywords(query_a)
     kw_b = _query_keywords(query_b)
     if not kw_a or not kw_b:
         return 0.0
-    return len(kw_a & kw_b) / len(kw_a | kw_b)
+    jaccard = len(kw_a & kw_b) / len(kw_a | kw_b)
+    # Boost similarity when queries share medical terms
+    shared_medical = (kw_a & kw_b) & MEDICAL_TERMS
+    if shared_medical:
+        jaccard = min(jaccard + 0.2, 1.0)
+    return jaccard
+
+
+def _profile_health_fingerprint(profile: dict[str, Any]) -> str:
+    """Hash only the health-critical fields of a profile for cache invalidation."""
+    critical_fields = {}
+    for key in ("conditions", "medications", "allergies", "recent_tests", "follow_up", "encounters"):
+        critical_fields[key] = profile.get(key, [])
+    serialized = json.dumps(critical_fields, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def find_cached_dashboard(
@@ -1181,7 +1252,7 @@ def find_cached_dashboard(
     person_id: str,
     query: str,
     intent: str,
-    similarity_threshold: float = 0.5,
+    similarity_threshold: float = 0.3,
     max_age_hours: int = DASHBOARD_CACHE_MAX_AGE_HOURS,
 ) -> dict[str, Any] | None:
     """Find a cached dashboard matching this query.
@@ -1190,14 +1261,14 @@ def find_cached_dashboard(
     1. Same intent category
     2. Query similarity >= threshold (Jaccard on keywords)
     3. Cache entry not older than max_age_hours
-    4. Profile hasn't been updated since the cache was generated
+    4. Profile health-critical fields haven't changed since cache was generated
     """
     cache = load_dashboard_cache(root, person_id)
     if not cache:
         return None
 
     profile = load_profile(root, person_id)
-    profile_updated = profile.get("audit", {}).get("updated_at", "")
+    current_fingerprint = _profile_health_fingerprint(profile)
 
     for entry in reversed(cache):  # newest first
         if entry.get("intent") != intent:
@@ -1214,10 +1285,17 @@ def find_cached_dashboard(
             except ValueError:
                 continue
 
-        # Check if profile changed since cache was created
-        cached_profile_updated = entry.get("profile_updated_at", "")
-        if profile_updated and cached_profile_updated and profile_updated != cached_profile_updated:
+        # Check if health-critical profile fields changed since cache was created
+        cached_fingerprint = entry.get("health_fingerprint", "")
+        if cached_fingerprint and current_fingerprint != cached_fingerprint:
             continue
+
+        # Legacy fallback: if no fingerprint in cache, use old timestamp check
+        if not cached_fingerprint:
+            profile_updated = profile.get("audit", {}).get("updated_at", "")
+            cached_profile_updated = entry.get("profile_updated_at", "")
+            if profile_updated and cached_profile_updated and profile_updated != cached_profile_updated:
+                continue
 
         # Check similarity
         sim = query_similarity(query, entry.get("query", ""))
@@ -1236,37 +1314,40 @@ def save_dashboard_to_cache(
     dashboard_text: str,
 ) -> None:
     """Save a dashboard to the cache for future reuse."""
-    cache = load_dashboard_cache(root, person_id)
+    with workspace_lock(root, person_id):
+        cache = load_dashboard_cache(root, person_id)
 
-    # Store profile's current updated_at so we can detect changes later.
-    profile = load_profile(root, person_id)
-    profile_updated_at = profile.get("audit", {}).get("updated_at", "")
+        # Store profile's current updated_at and health fingerprint.
+        profile = load_profile(root, person_id)
+        profile_updated_at = profile.get("audit", {}).get("updated_at", "")
 
-    entry = {
-        "query": query,
-        "intent": intent,
-        "intents_used": intents_used,
-        "cached_at": now_utc(),
-        "profile_updated_at": profile_updated_at,
-        "dashboard_text": dashboard_text,
-        "keywords": sorted(_query_keywords(query)),
-    }
-    cache.append(entry)
+        entry = {
+            "query": query,
+            "intent": intent,
+            "intents_used": intents_used,
+            "cached_at": now_utc(),
+            "profile_updated_at": profile_updated_at,
+            "health_fingerprint": _profile_health_fingerprint(profile),
+            "dashboard_text": dashboard_text,
+            "keywords": sorted(_query_keywords(query)),
+        }
+        cache.append(entry)
 
-    # Keep only the last 20 entries to prevent unbounded growth.
-    if len(cache) > 20:
-        cache = cache[-20:]
+        # Keep only the last 20 entries to prevent unbounded growth.
+        if len(cache) > 20:
+            cache = cache[-20:]
 
-    save_dashboard_cache(root, person_id, cache)
+        save_dashboard_cache(root, person_id, cache)
 
 
 def record_intent_usage(root: Path, person_id: str, intent: str) -> None:
     """Track which intents the user triggers most (usage learning)."""
-    profile = load_profile(root, person_id)
-    usage = profile.get("preferences", {}).get("dashboard_intent_usage", {})
-    usage[intent] = usage.get(intent, 0) + 1
-    profile.setdefault("preferences", {})["dashboard_intent_usage"] = usage
-    save_profile(root, person_id, profile)
+    with workspace_lock(root, person_id):
+        profile = load_profile(root, person_id)
+        usage = profile.get("preferences", {}).get("dashboard_intent_usage", {})
+        usage[intent] = usage.get(intent, 0) + 1
+        profile.setdefault("preferences", {})["dashboard_intent_usage"] = usage
+        save_profile(root, person_id, profile)
 
 
 def top_intents(root: Path, person_id: str, limit: int = 3) -> list[str]:
@@ -1274,6 +1355,116 @@ def top_intents(root: Path, person_id: str, limit: int = 3) -> list[str]:
     profile = load_profile(root, person_id)
     usage = profile.get("preferences", {}).get("dashboard_intent_usage", {})
     return sorted(usage, key=usage.get, reverse=True)[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Medication–allergy cross-validation (#Item 2)
+# ---------------------------------------------------------------------------
+
+KNOWN_DRUG_CLASSES: dict[str, list[str]] = {
+    "penicillin": [
+        "amoxicillin", "ampicillin", "penicillin", "piperacillin",
+        "nafcillin", "oxacillin", "dicloxacillin", "augmentin",
+    ],
+    "sulfa": [
+        "sulfamethoxazole", "sulfasalazine", "bactrim", "septra",
+        "trimethoprim-sulfamethoxazole", "dapsone",
+    ],
+    "cephalosporin": [
+        "cephalexin", "cefazolin", "ceftriaxone", "cefdinir",
+        "cefuroxime", "cefepime", "cefpodoxime",
+    ],
+    "nsaid": [
+        "ibuprofen", "naproxen", "aspirin", "celecoxib",
+        "diclofenac", "meloxicam", "indomethacin", "ketorolac",
+    ],
+    "statin": [
+        "atorvastatin", "rosuvastatin", "simvastatin", "pravastatin",
+        "lovastatin", "fluvastatin", "pitavastatin",
+    ],
+    "ace inhibitor": [
+        "lisinopril", "enalapril", "ramipril", "benazepril",
+        "captopril", "fosinopril", "quinapril",
+    ],
+    "opioid": [
+        "morphine", "oxycodone", "hydrocodone", "codeine",
+        "tramadol", "fentanyl", "methadone", "hydromorphone",
+    ],
+    "fluoroquinolone": [
+        "ciprofloxacin", "levofloxacin", "moxifloxacin",
+        "ofloxacin", "norfloxacin",
+    ],
+}
+
+
+def _drug_class_for(drug_name: str) -> list[str]:
+    """Return all class names a drug belongs to."""
+    lowered = drug_name.strip().lower()
+    classes = []
+    for cls_name, members in KNOWN_DRUG_CLASSES.items():
+        if lowered in members or lowered == cls_name:
+            classes.append(cls_name)
+    return classes
+
+
+def check_medication_allergy_conflicts(profile: dict) -> list[dict]:
+    """Compare active medications against allergies using fuzzy class matching.
+
+    Returns a list of conflict dicts with keys:
+        medication, allergy, risk ('high' or 'medium'), reason
+    """
+    conflicts: list[dict] = []
+    medications = profile.get("medications", [])
+    allergies = profile.get("allergies", [])
+
+    for med in medications:
+        med_name = str(med.get("name", "")).strip().lower()
+        if not med_name:
+            continue
+        med_classes = _drug_class_for(med_name)
+
+        for allergy in allergies:
+            substance = str(allergy.get("substance", "")).strip().lower()
+            if not substance or substance == "nkda":
+                continue
+
+            # Direct name match
+            if substance in med_name or med_name in substance:
+                conflicts.append({
+                    "medication": med.get("name", med_name),
+                    "allergy": allergy.get("substance", substance),
+                    "risk": "high",
+                    "reason": f"Direct match: medication '{med.get('name')}' matches allergy '{allergy.get('substance')}'.",
+                })
+                continue
+
+            # Class-based fuzzy match
+            allergy_classes = _drug_class_for(substance)
+            # Also check if allergy substance IS a class name
+            if substance in KNOWN_DRUG_CLASSES:
+                allergy_classes.append(substance)
+
+            overlap = set(med_classes) & set(allergy_classes)
+            if overlap:
+                cls_label = ", ".join(sorted(overlap))
+                conflicts.append({
+                    "medication": med.get("name", med_name),
+                    "allergy": allergy.get("substance", substance),
+                    "risk": "high",
+                    "reason": f"Class match ({cls_label}): '{med.get('name')}' belongs to the same drug class as allergy '{allergy.get('substance')}'.",
+                })
+                continue
+
+            # Check if allergy substance is a class name and med is a member
+            if substance in KNOWN_DRUG_CLASSES and med_name in KNOWN_DRUG_CLASSES[substance]:
+                conflicts.append({
+                    "medication": med.get("name", med_name),
+                    "allergy": allergy.get("substance", substance),
+                    "risk": "high",
+                    "reason": f"'{med.get('name')}' is a member of the '{substance}' drug class listed as an allergy.",
+                })
+
+    return conflicts
 
 
 # Sentinel for project-root mode (one person = one folder).

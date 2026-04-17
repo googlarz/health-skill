@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -44,88 +45,92 @@ def urgency_bucket(score: int) -> str:
 def collect_project_rows(root: Path) -> list[dict]:
     project_rows = []
     for project in discover_projects(root):
-        profile = load_json(project / "HEALTH_PROFILE.json")
-        conflicts = load_json(project / "HEALTH_CONFLICTS.json") if (project / "HEALTH_CONFLICTS.json").exists() else []
-        review_queue = load_json(project / "HEALTH_REVIEW_QUEUE.json") if (project / "HEALTH_REVIEW_QUEUE.json").exists() else []
-        inbox_count = len([p for p in (project / "inbox").iterdir()]) if (project / "inbox").exists() else 0
-        open_conflicts = sum(1 for item in conflicts if item.get("status") == "open")
-        open_reviews = sum(1 for item in review_queue if item.get("status") == "open")
-        abnormal_labs = sum(
-            1
-            for item in profile.get("recent_tests", [])
-            if item.get("flag") in {"high", "low", "abnormal"}
-        )
-        overdue_follow_ups = sum(
-            1
-            for item in profile.get("follow_up", [])
-            if item.get("due_date")
-            and item.get("status") != "done"
-            and item.get("due_date") < date.today().isoformat()
-        )
-        weight_entries = load_weight_entries(project)
-        weight_signal = 0
-        if len(weight_entries) >= 2:
-            first = weight_entries[0]["value"]
-            latest = weight_entries[-1]["value"]
-            if first:
-                change_pct = abs((latest - first) / first)
-                if change_pct >= 0.05:
-                    weight_signal = 1
-        urgency_score = (
-            inbox_count
-            + open_conflicts * 2
-            + open_reviews
-            + abnormal_labs * 2
-            + overdue_follow_ups * 3
-            + weight_signal
-        )
+        try:
+            profile = load_json(project / "HEALTH_PROFILE.json")
+            conflicts = load_json(project / "HEALTH_CONFLICTS.json") if (project / "HEALTH_CONFLICTS.json").exists() else []
+            review_queue = load_json(project / "HEALTH_REVIEW_QUEUE.json") if (project / "HEALTH_REVIEW_QUEUE.json").exists() else []
+            inbox_count = len([p for p in (project / "inbox").iterdir()]) if (project / "inbox").exists() else 0
+            open_conflicts = sum(1 for item in conflicts if item.get("status") == "open")
+            open_reviews = sum(1 for item in review_queue if item.get("status") == "open")
+            abnormal_labs = sum(
+                1
+                for item in profile.get("recent_tests", [])
+                if item.get("flag") in {"high", "low", "abnormal"}
+            )
+            overdue_follow_ups = sum(
+                1
+                for item in profile.get("follow_up", [])
+                if item.get("due_date")
+                and item.get("status") != "done"
+                and item.get("due_date") < date.today().isoformat()
+            )
+            weight_entries = load_weight_entries(project)
+            weight_signal = 0
+            if len(weight_entries) >= 2:
+                first = weight_entries[0]["value"]
+                latest = weight_entries[-1]["value"]
+                if first:
+                    change_pct = abs((latest - first) / first)
+                    if change_pct >= 0.05:
+                        weight_signal = 1
+            urgency_score = (
+                inbox_count
+                + open_conflicts * 2
+                + open_reviews
+                + abnormal_labs * 2
+                + overdue_follow_ups * 3
+                + weight_signal
+            )
 
-        follow_up_lines = []
-        reminder_lines = []
-        for item in profile.get("follow_up", [])[:5]:
-            task = item.get("task")
-            due_date = item.get("due_date")
-            status = item.get("status")
-            if task:
-                parts = [task]
-                if due_date:
-                    parts.append(due_date)
-                if status:
-                    parts.append(status)
-                line = " | ".join(parts)
-                follow_up_lines.append(line)
-                if status != "done":
-                    reminder_lines.append(line)
+            follow_up_lines = []
+            reminder_lines = []
+            for item in profile.get("follow_up", [])[:5]:
+                task = item.get("task")
+                due_date = item.get("due_date")
+                status = item.get("status")
+                if task:
+                    parts = [task]
+                    if due_date:
+                        parts.append(due_date)
+                    if status:
+                        parts.append(status)
+                    line = " | ".join(parts)
+                    follow_up_lines.append(line)
+                    if status != "done":
+                        reminder_lines.append(line)
 
-        project_rows.append(
-            {
-                "name": profile.get("name") or project.name,
-                "folder": project.name,
-                "inbox_count": inbox_count,
-                "open_conflicts": open_conflicts,
-                "open_reviews": open_reviews,
-                "abnormal_labs": abnormal_labs,
-                "overdue_follow_ups": overdue_follow_ups,
-                "urgency_score": urgency_score,
-                "urgency": urgency_bucket(urgency_score),
-                "last_updated": profile.get("audit", {}).get("updated_at") or "unknown",
-                "follow_up_lines": follow_up_lines,
-                "reminder_lines": reminder_lines,
-                "medication_count": len(profile.get("medications", [])),
-                "primary_caregiver": profile.get("preferences", {}).get("primary_caregiver", ""),
-                "reason_lines": [
-                    reason
-                    for reason in [
-                        f"{inbox_count} inbox file(s)" if inbox_count else "",
-                        f"{open_conflicts} open conflict(s)" if open_conflicts else "",
-                        f"{open_reviews} review item(s)" if open_reviews else "",
-                        f"{abnormal_labs} abnormal lab flag(s)" if abnormal_labs else "",
-                        f"{overdue_follow_ups} overdue follow-up(s)" if overdue_follow_ups else "",
-                    ]
-                    if reason
-                ],
-            }
-        )
+            project_rows.append(
+                {
+                    "name": profile.get("name") or project.name,
+                    "folder": project.name,
+                    "inbox_count": inbox_count,
+                    "open_conflicts": open_conflicts,
+                    "open_reviews": open_reviews,
+                    "abnormal_labs": abnormal_labs,
+                    "overdue_follow_ups": overdue_follow_ups,
+                    "urgency_score": urgency_score,
+                    "urgency": urgency_bucket(urgency_score),
+                    "last_updated": profile.get("audit", {}).get("updated_at") or "unknown",
+                    "follow_up_lines": follow_up_lines,
+                    "reminder_lines": reminder_lines,
+                    "medication_count": len(profile.get("medications", [])),
+                    "primary_caregiver": profile.get("preferences", {}).get("primary_caregiver", ""),
+                    "reason_lines": [
+                        reason
+                        for reason in [
+                            f"{inbox_count} inbox file(s)" if inbox_count else "",
+                            f"{open_conflicts} open conflict(s)" if open_conflicts else "",
+                            f"{open_reviews} review item(s)" if open_reviews else "",
+                            f"{abnormal_labs} abnormal lab flag(s)" if abnormal_labs else "",
+                            f"{overdue_follow_ups} overdue follow-up(s)" if overdue_follow_ups else "",
+                        ]
+                        if reason
+                    ],
+                }
+            )
+        except Exception as exc:
+            print(f"[WARNING] Skipping project folder '{project.name}': {exc}", file=sys.stderr)
+            continue
     return project_rows
 
 

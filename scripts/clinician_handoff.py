@@ -10,6 +10,7 @@ try:
     from .care_workspace import (
         exports_dir,
         atomic_write_text,
+        check_medication_allergy_conflicts,
         load_conflicts,
         load_profile,
         notes_dir,
@@ -20,6 +21,7 @@ except ImportError:  # pragma: no cover
     from care_workspace import (
         exports_dir,
         atomic_write_text,
+        check_medication_allergy_conflicts,
         load_conflicts,
         load_profile,
         notes_dir,
@@ -85,6 +87,51 @@ def render_section(title: str, items: list[str]) -> str:
     return f"## {title}\n{body}"
 
 
+def _medication_context(profile: dict, reason: str) -> list[str]:
+    """Build concise medication context relevant to the visit reason."""
+    reason_lower = reason.lower()
+    reason_words = {w for w in reason_lower.split() if len(w) > 3}
+    lines: list[str] = []
+    for med in profile.get("medications", []):
+        med_name = str(med.get("name", "")).lower()
+        # Check if medication name overlaps with reason keywords
+        is_relevant = any(
+            w in med_name or w in reason_lower
+            for w in med_name.split() if len(w) > 3
+        ) or any(w in med_name for w in reason_words)
+        if is_relevant:
+            dose = med.get("dose", "")
+            freq = med.get("frequency", "")
+            lines.append(f"{med.get('name', '')} {dose} {freq}".strip())
+    return lines[:5]
+
+
+def _allergy_table(profile: dict) -> list[str]:
+    """Format allergies as substance | reaction | severity."""
+    lines: list[str] = []
+    for allergy in profile.get("allergies", []):
+        substance = allergy.get("substance", "unknown")
+        reaction = allergy.get("reaction", "") or "not specified"
+        severity = allergy.get("severity_level", "") or allergy.get("severity", "") or "unknown"
+        lines.append(f"{substance} | {reaction} | {severity}")
+    return lines
+
+
+def _symptom_timeline(profile: dict) -> list[str]:
+    """Pull last 5 encounters sorted by date as a compact timeline."""
+    encounters = profile.get("encounters", [])
+    sorted_enc = sorted(encounters, key=lambda e: e.get("date", ""), reverse=True)[:5]
+    lines: list[str] = []
+    for enc in sorted_enc:
+        d = enc.get("date", "unknown")
+        title = enc.get("title", "")
+        summary = enc.get("summary", "")
+        # Keep compact: date + title, truncated summary
+        compact_summary = summary[:80] + "..." if len(summary) > 80 else summary
+        lines.append(f"{d}: {title}" + (f" — {compact_summary}" if compact_summary else ""))
+    return lines
+
+
 def build_handoff(
     root: Path,
     person_id: str,
@@ -109,6 +156,35 @@ def build_handoff(
         "",
         f"## Visit Focus\n- {VISIT_HINTS[visit_type]}",
         "",
+    ]
+
+    # Safety Alerts: medication-allergy conflicts
+    safety_alerts = check_medication_allergy_conflicts(profile)
+    if safety_alerts:
+        alert_lines = [
+            f"**{a['risk'].upper()}**: {a['medication']} vs '{a['allergy']}' — {a['reason']}"
+            for a in safety_alerts
+        ]
+        parts.append(render_section("Safety Alerts", alert_lines))
+        parts.append("")
+
+    # Medication Context: meds relevant to the visit reason
+    med_context = _medication_context(profile, reason)
+    if med_context:
+        parts.append(render_section("Medication Context (visit-relevant)", med_context))
+        parts.append("")
+
+    # Allergy Check: full table
+    allergy_lines = _allergy_table(profile)
+    parts.append(render_section("Allergies (substance | reaction | severity)", allergy_lines))
+    parts.append("")
+
+    # Symptom Timeline: last 5 encounters
+    timeline = _symptom_timeline(profile)
+    parts.append(render_section("Symptom Timeline (recent encounters)", timeline))
+    parts.append("")
+
+    parts.extend([
         render_section(
             "Known Conditions",
             [render_record(item, ("name", "status")) for item in profile.get("conditions", [])],
@@ -120,18 +196,8 @@ def build_handoff(
         ),
         "",
         render_section(
-            "Allergies",
-            [render_record(item, ("substance", "reaction", "severity")) for item in profile.get("allergies", [])],
-        ),
-        "",
-        render_section(
             "Recent Tests",
             [render_record(item, ("name", "value", "unit", "flag", "date")) for item in profile.get("recent_tests", [])],
-        ),
-        "",
-        render_section(
-            "Recent Encounters",
-            [render_record(item, ("date", "title", "summary")) for item in profile.get("encounters", [])[:5]],
         ),
         "",
         render_section("Recent Notes", note_summaries(root, person_id, note_limit)),
@@ -146,7 +212,7 @@ def build_handoff(
             ],
         ),
         "",
-    ]
+    ])
     return "\n".join(parts)
 
 

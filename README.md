@@ -12,20 +12,39 @@ Most health-related AI use loses context between sessions. You upload a PDF, ask
 
 Health Skill solves that by giving Claude a durable workspace. Future sessions start from current conditions, medications, recent labs, pending follow-ups, and unresolved questions. A single lab result is useful; a lab result connected to past results, medication changes, and follow-up plans is much more useful.
 
-## Quick Start
+## Quick Start (5 commands)
 
 ```bash
-# Initialize a person folder
-python3 scripts/care_workspace.py init-project --root . --name "Jane Doe"
+# 1. Create a folder and initialize it
+mkdir ~/Health/jane-doe && cd ~/Health/jane-doe
+python3 /path/to/health-skill/scripts/care_workspace.py init-project --root "$(pwd)" --name "Jane Doe"
 
-# Drop files into inbox/ then process them
-python3 scripts/care_workspace.py process-inbox --root .
+# 2. Drop a lab report or health document into inbox/
+cp ~/Downloads/lab-results.pdf inbox/
 
-# Preview what inbox processing would do
-python3 scripts/care_workspace.py process-inbox --root . --dry-run
+# 3. Process it (extracts labs, meds, follow-ups automatically)
+python3 /path/to/health-skill/scripts/care_workspace.py process-inbox --root "$(pwd)"
+
+# 4. Open your health home screen
+cat HEALTH_HOME.md
+
+# 5. Ask a focused question (generates a dashboard just for your query)
+python3 /path/to/health-skill/scripts/care_workspace.py query-dashboard --root "$(pwd)" --query "what do my labs mean?" --save
+cat exports/QUERY_DASHBOARD.md
 ```
 
-Then open `HEALTH_HOME.md`, `TODAY.md`, or `NEXT_APPOINTMENT.md`.
+**Which command do I use?**
+
+| I want to... | Command |
+|---|---|
+| Set up a new person folder | `init-project` |
+| Add a new document | Drop into `inbox/`, then `process-inbox` |
+| See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
+| Prepare for an appointment | Open `NEXT_APPOINTMENT.md` or `query-dashboard --query "visit prep"` |
+| Ask a health question | `query-dashboard --query "your question"` |
+| Preview without changing anything | `process-inbox --dry-run` |
+
+See [docs/commands.md](docs/commands.md) for the full reference.
 
 ## Key Files
 

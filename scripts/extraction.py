@@ -195,11 +195,53 @@ def extract_lab_candidates(raw_text: str, source_date: str) -> list[dict[str, An
         r"(?:\s+(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
         flags=re.IGNORECASE,
     )
+    # Pattern 3: parenthetical ranges like "LDL 162 mg/dL (goal <100)" or "TSH 4.5 mIU/L (0.4-4.0)"
+    _LAB_PATTERN_3 = re.compile(
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s+"
+        r"(?P<value>-?\d+(?:\.\d+)?)\s*(?P<unit>[A-Za-z%/]+)\s*"
+        r"\(\s*(?:goal\s*)?(?P<range_spec>[<>]?\s*-?\d+(?:\.\d+)?(?:\s*-\s*-?\d+(?:\.\d+)?)?)\s*\)\s*$",
+        flags=re.IGNORECASE,
+    )
+    # Pattern 4: semicolon-delimited CSV export fields
+    _LAB_PATTERN_4 = re.compile(
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s*;\s*"
+        r"(?P<value>-?\d+(?:\.\d+)?)\s*;\s*(?P<unit>[A-Za-z%/]+)"
+        r"(?:\s*;\s*(?P<low>-?\d+(?:\.\d+)?)\s*-\s*(?P<high>-?\d+(?:\.\d+)?))?"
+        r"(?:\s*;\s*(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
+        flags=re.IGNORECASE,
+    )
     for line in raw_text.splitlines():
         stripped = line.strip()
         match = _LAB_PATTERN_1.match(stripped)
         if not match:
             match = _LAB_PATTERN_2.match(stripped)
+        if not match:
+            match = _LAB_PATTERN_4.match(stripped)
+        if not match:
+            # Try pattern 3 (parenthetical range)
+            m3 = _LAB_PATTERN_3.match(stripped)
+            if m3:
+                g3 = m3.groupdict()
+                range_spec = g3["range_spec"].strip()
+                low3 = None
+                high3 = None
+                # Parse range_spec: could be "<100", ">50", "0.4-4.0"
+                range_match = re.match(r"(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)", range_spec)
+                if range_match:
+                    low3 = range_match.group(1)
+                    high3 = range_match.group(2)
+                else:
+                    lt_match = re.match(r"<\s*(-?\d+(?:\.\d+)?)", range_spec)
+                    gt_match = re.match(r">\s*(-?\d+(?:\.\d+)?)", range_spec)
+                    if lt_match:
+                        high3 = lt_match.group(1)
+                    elif gt_match:
+                        low3 = gt_match.group(1)
+                # Construct a fake groupdict compatible with the rest
+                match = type("_M", (), {"groupdict": lambda self: {
+                    "name": g3["name"], "value": g3["value"], "unit": g3["unit"],
+                    "low": low3, "high": high3, "flag": None,
+                }})()
         if not match:
             continue
         groups = match.groupdict()
@@ -304,6 +346,14 @@ def extract_medication_candidates(raw_text: str, doc_type: str) -> list[dict[str
         "twice weekly": "twice weekly",
         "every other day": "every other day",
         "at bedtime": "at bedtime",
+        "every morning": "every morning",
+        "every evening": "every evening",
+        "every night": "every night",
+        "mon/wed/fri": "MWF",
+        "mwf": "MWF",
+        "as directed": "as directed",
+        "with meals": "with meals",
+        "before bed": "at bedtime",
     }
     form_tokens = {
         "tablet", "capsule", "inhaler", "patch", "solution", "cream", "spray",
@@ -326,6 +376,15 @@ def extract_medication_candidates(raw_text: str, doc_type: str) -> list[dict[str
             match = re.match(
                 r"^\s*([A-Za-z][A-Za-z0-9/-]*(?: (?:ER|XR|SR|CR|[A-Za-z0-9/-]+)){0,3})\s+"
                 r"(\d+(?:\.\d+)?)(mg|mcg|g|ml|units?)\b(.*)$",
+                stripped,
+                flags=re.IGNORECASE,
+            )
+        # Pattern 3: "take X daily" verb prefix (e.g. "Take Lisinopril 10 mg daily")
+        if not match:
+            match = re.match(
+                r"^\s*(?:take|use|apply|inject)\s+"
+                r"([A-Za-z][A-Za-z0-9/-]*(?: (?:ER|XR|SR|CR|[A-Za-z0-9/-]+)){0,3})\s+"
+                r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)\b(.*)$",
                 stripped,
                 flags=re.IGNORECASE,
             )
@@ -429,6 +488,24 @@ def _parse_absolute_date(text: str) -> str | None:
     return None
 
 
+_SPECIALIST_PATTERN = re.compile(
+    r"(?:see|follow\s*up\s*with|return\s*to|refer(?:ral)?\s*to)\s+"
+    r"(?:(?:Dr\.?\s*)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*))"
+    r"(?:\s+in\s+(.+?))?(?:\s*[.;]|$)",
+    re.IGNORECASE,
+)
+
+_KNOWN_SPECIALTIES = {
+    "cardiologist", "cardiology", "endocrinologist", "endocrinology",
+    "dermatologist", "dermatology", "neurologist", "neurology",
+    "oncologist", "oncology", "rheumatologist", "rheumatology",
+    "gastroenterologist", "gastroenterology", "pulmonologist", "pulmonology",
+    "urologist", "urology", "nephrologist", "nephrology", "orthopedics",
+    "ophthalmologist", "ophthalmology", "psychiatrist", "psychiatry",
+    "allergist", "hematologist", "ent", "podiatrist",
+}
+
+
 def extract_follow_up_candidates(raw_text: str) -> list[dict[str, Any]]:
     candidates = []
     action_verbs = {"schedule", "recheck", "repeat", "return", "call if", "refer"}
@@ -441,8 +518,31 @@ def extract_follow_up_candidates(raw_text: str) -> list[dict[str, Any]]:
             or lowered.startswith("next:")
             or any(lowered.startswith(verb) or f" {verb}" in lowered for verb in action_verbs)
         )
+
+        # Item 9: also match specialist referral patterns
+        specialist_match = _SPECIALIST_PATTERN.search(stripped)
+        specialist_name = ""
+        if specialist_match:
+            is_follow_up = True
+            raw_specialist = (specialist_match.group(1) or "").strip()
+            if raw_specialist.lower() in _KNOWN_SPECIALTIES:
+                specialist_name = raw_specialist
+            elif raw_specialist:
+                specialist_name = raw_specialist
+
+        # Also match "Return to [clinic/doctor]"
+        return_match = re.search(
+            r"(?:return\s+to|go\s+back\s+to)\s+([A-Za-z][A-Za-z0-9 .'-]{2,50})",
+            stripped, re.IGNORECASE,
+        )
+        if return_match and not is_follow_up:
+            is_follow_up = True
+            if not specialist_name:
+                specialist_name = return_match.group(1).strip()
+
         if not is_follow_up:
             continue
+
         # Try to extract a due date
         due_date = _parse_relative_date(lowered) or _parse_absolute_date(stripped)
         candidate: dict[str, Any] = {
@@ -451,6 +551,8 @@ def extract_follow_up_candidates(raw_text: str) -> list[dict[str, Any]]:
         }
         if due_date:
             candidate["due_date"] = due_date
+        if specialist_name:
+            candidate["specialist"] = specialist_name
         candidates.append(
             {
                 "section": "follow_up",
@@ -504,11 +606,37 @@ def classify_document_content(raw_text: str, filename_guess: str) -> str:
     return filename_guess
 
 
+_SEVERITY_ADJECTIVE_MAP: dict[str, str] = {
+    "mild": "mild",
+    "moderate": "moderate",
+    "severe": "severe",
+    "life-threatening": "life-threatening",
+    "anaphylaxis": "life-threatening",
+    "anaphylactic": "life-threatening",
+}
+
+_LIFE_THREATENING_REACTIONS = {"anaphylaxis", "anaphylactic shock", "angioedema"}
+
+
+def _infer_severity(reaction_text: str) -> str:
+    """Map reaction text to a severity_level enum value."""
+    lowered = reaction_text.strip().lower()
+    # Check for life-threatening keywords first
+    for lt in _LIFE_THREATENING_REACTIONS:
+        if lt in lowered:
+            return "life-threatening"
+    # Check for adjective prefix: "severe rash", "mild hives", etc.
+    for adj, level in _SEVERITY_ADJECTIVE_MAP.items():
+        if lowered.startswith(adj) or f" {adj} " in f" {lowered} ":
+            return level
+    return ""
+
+
 def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
-    """Extract allergy mentions from document text (Item 9)."""
+    """Extract allergy mentions from document text (Item 9 + Item 8 severity)."""
     candidates = []
 
-    # NKDA = No Known Drug Allergies
+    # NKDA = No Known Drug Allergies — special case: note, not an allergy entry
     if re.search(r"\bNKDA\b", raw_text):
         candidates.append(
             {
@@ -517,16 +645,23 @@ def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
                     "substance": "NKDA",
                     "reaction": "no known drug allergies",
                     "severity_level": "",
-                    "reaction_type": "none",
+                    "reaction_type": "note",
                 },
                 "confidence": "high",
                 "auto_apply": False,
-                "rationale": "NKDA notation detected in document.",
+                "rationale": "NKDA notation detected — this is a note, not an allergy entry.",
                 "source_snippet": "NKDA",
             }
         )
 
-    # Patterns: "allergic to X", "allergy: X", "adverse reaction to X"
+    # Pattern for parenthetical severity: "Penicillin (anaphylaxis)"
+    paren_pattern = re.compile(
+        r"(?:allergic to|allergy:\s*|allergies:\s*|adverse reaction to)?\s*"
+        r"([A-Za-z][A-Za-z0-9 /-]{1,60}?)\s*\(\s*([^)]+)\s*\)",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+    # General allergy patterns
     allergy_patterns = [
         re.compile(
             r"(?:allergic to|allergy:\s*|allergies:\s*|adverse reaction to)\s+"
@@ -534,19 +669,58 @@ def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
             re.IGNORECASE | re.MULTILINE,
         ),
     ]
+
+    seen_substances: set[str] = set()
+
+    # First pass: parenthetical severity pattern
+    for match in paren_pattern.finditer(raw_text):
+        substance = match.group(1).strip().rstrip(",;.")
+        reaction = match.group(2).strip().rstrip(",;.)")
+        if len(substance) < 2 or substance.lower() == "nkda":
+            continue
+        # Skip if substance looks like a lab name (number-heavy)
+        if re.match(r"^\d", substance):
+            continue
+        severity = _infer_severity(reaction)
+        sub_key = substance.lower()
+        if sub_key in seen_substances:
+            continue
+        seen_substances.add(sub_key)
+        candidates.append(
+            {
+                "section": "allergies",
+                "candidate": {
+                    "substance": substance,
+                    "reaction": reaction,
+                    "severity_level": severity,
+                    "reaction_type": "drug" if reaction else "unknown",
+                },
+                "confidence": "medium",
+                "auto_apply": False,
+                "rationale": "Allergy with parenthetical reaction/severity detected.",
+                "source_snippet": match.group(0).strip(),
+            }
+        )
+
+    # Second pass: general allergy patterns
     for pattern in allergy_patterns:
         for match in pattern.finditer(raw_text):
             substance = match.group(1).strip().rstrip(",;.")
             reaction = (match.group(2) or "").strip().rstrip(",;.)")
             if len(substance) < 2:
                 continue
+            sub_key = substance.lower()
+            if sub_key in seen_substances:
+                continue
+            seen_substances.add(sub_key)
+            severity = _infer_severity(reaction) if reaction else ""
             candidates.append(
                 {
                     "section": "allergies",
                     "candidate": {
                         "substance": substance,
                         "reaction": reaction,
-                        "severity_level": "",
+                        "severity_level": severity,
                         "reaction_type": "drug" if reaction else "unknown",
                     },
                     "confidence": "medium",

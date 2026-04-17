@@ -23,6 +23,7 @@ try:
         calendar_export_path,
         care_status_path,
         change_report_path,
+        check_medication_allergy_conflicts,
         dossier_path,
         exports_dir,
         home_path,
@@ -70,6 +71,7 @@ except ImportError:
         calendar_export_path,
         care_status_path,
         change_report_path,
+        check_medication_allergy_conflicts,
         dossier_path,
         exports_dir,
         home_path,
@@ -662,11 +664,51 @@ def build_pattern_insights(
                         )
                     break
 
+    # --- Temporal side-effect correlation (#Item 4 + #Item 12) ---
+    _SYMPTOM_KEYWORDS = {
+        "pain", "nausea", "fatigue", "rash", "dizziness", "headache",
+        "muscle", "ache", "swelling", "vomiting", "itching", "insomnia",
+    }
+    # Build a map of medication start dates from medication_history
+    med_start_dates: dict[str, datetime] = {}
+    for hist_entry in medication_history:
+        if hist_entry.get("event_type") == "added":
+            med_name_h = str(hist_entry.get("medication_name", "")).strip().lower()
+            recorded = parse_date_like(str(hist_entry.get("recorded_at", "")))
+            if med_name_h and recorded:
+                # Keep the earliest add date
+                if med_name_h not in med_start_dates or recorded < med_start_dates[med_name_h]:
+                    med_start_dates[med_name_h] = recorded
+
+    if med_start_dates:
+        # Gather encounter / note dates with symptom mentions
+        symptom_events: list[tuple[datetime, set[str]]] = []
+        for enc in profile.get("encounters", []):
+            enc_date = parse_date_like(str(enc.get("date", "")))
+            if not enc_date:
+                continue
+            text_blob = f"{enc.get('title', '')} {enc.get('summary', '')}".lower()
+            found_symptoms = {kw for kw in _SYMPTOM_KEYWORDS if kw in text_blob}
+            if found_symptoms:
+                symptom_events.append((enc_date, found_symptoms))
+
+        for med_name_lower, start_dt in med_start_dates.items():
+            for evt_dt, syms in symptom_events:
+                days_after = (evt_dt - start_dt).days
+                if 30 <= days_after <= 90:
+                    sym_list = ", ".join(sorted(syms))
+                    med_display = med_name_lower.title()
+                    insights.append(
+                        f"Symptoms ({sym_list}) appeared ~{days_after} days after starting {med_display}. "
+                        f"This timing may be worth discussing with a clinician."
+                    )
+                    break  # one flag per medication is enough
+
     deduped: list[str] = []
     for item in insights:
         if item not in deduped:
             deduped.append(item)
-    return deduped[:8]
+    return deduped[:10]
 
 
 def render_patterns_text(
@@ -1756,6 +1798,20 @@ def render_clinician_packet_text(profile: dict[str, Any], visit_type: str, reaso
         "\n".join(f"- {item}" for item in suggested_visit_questions(profile)),
         "",
     ])
+
+    # Safety Alerts: medication-allergy cross-validation (#Item 2)
+    safety_alerts = check_medication_allergy_conflicts(profile)
+    if safety_alerts:
+        lines.extend([
+            "## Safety Alerts",
+        ])
+        for alert in safety_alerts:
+            lines.append(
+                f"- **{alert['risk'].upper()} RISK**: {alert['medication']} vs allergy "
+                f"'{alert['allergy']}' — {alert['reason']}"
+            )
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -2076,7 +2132,8 @@ QUERY_INTENTS: dict[str, dict[str, Any]] = {
             "medication", "medications", "med", "meds", "drug", "drugs",
             "prescription", "prescriptions", "dose", "dosage", "side effect",
             "interaction", "refill", "pharmacy", "statin", "metformin",
-            "insulin", "lisinopril",
+            "insulin", "lisinopril", "worried", "concerned", "too many",
+            "pills", "interactions", "reconciliation", "reconcile",
         ],
         "title": "Medication Review Dashboard",
         "sections": ["identity", "staleness", "medications", "medication_history",
@@ -2098,6 +2155,7 @@ QUERY_INTENTS: dict[str, dict[str, Any]] = {
             "symptom", "symptoms", "pain", "hurts", "ache", "fever", "nausea",
             "dizzy", "tired", "fatigue", "swelling", "rash", "breathing",
             "cough", "headache", "worry", "worried", "should i",
+            "concerned", "risk",
         ],
         "title": "Symptom Context Dashboard",
         "sections": ["identity", "staleness", "conditions", "medications",
@@ -2108,6 +2166,7 @@ QUERY_INTENTS: dict[str, dict[str, Any]] = {
         "keywords": [
             "weight", "bmi", "blood pressure", "bp", "heart rate", "pulse",
             "glucose", "sugar", "vitals", "trend", "tracking",
+            "gain", "loss", "fluctuations",
         ],
         "title": "Vitals Dashboard",
         "sections": ["identity", "staleness", "weight_trend", "vitals_trend",
@@ -2132,6 +2191,24 @@ QUERY_INTENTS: dict[str, dict[str, Any]] = {
         "sections": ["identity", "staleness", "overdue_items", "upcoming_items",
                       "inbox_status", "review_queue_summary", "conflicts_summary",
                       "questions"],
+    },
+    "medication_reconciliation": {
+        "keywords": [
+            "reconciliation", "reconcile", "compare", "old list", "new list",
+            "medication changes", "switched",
+        ],
+        "title": "Medication Reconciliation Dashboard",
+        "sections": ["identity", "staleness", "medications", "medication_history",
+                      "medication_conflicts", "related_labs", "questions"],
+    },
+    "side_effect_check": {
+        "keywords": [
+            "side effect", "side effects", "adverse", "reaction",
+            "since starting", "after taking", "muscle pain", "nausea from",
+        ],
+        "title": "Side Effect Safety Dashboard",
+        "sections": ["identity", "staleness", "medications", "allergies",
+                      "recent_encounters", "patterns", "questions"],
     },
 }
 
