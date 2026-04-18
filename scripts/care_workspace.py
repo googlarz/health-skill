@@ -595,10 +595,21 @@ def normalize_test_name(name: str) -> str:
         "hdl": "HDL",
         "a1c": "A1C",
         "hba1c": "A1C",
+        "hemoglobin a1c": "A1C",
         "tsh": "TSH",
         "bun": "BUN",
         "alt": "ALT",
         "ast": "AST",
+        "ldl cholesterol": "LDL",
+        "hdl cholesterol": "HDL",
+        "total cholesterol": "Total Cholesterol",
+        "glucose, fasting": "Glucose (Fasting)",
+        "fasting glucose": "Glucose (Fasting)",
+        "glucose fasting": "Glucose (Fasting)",
+        "vitamin d, 25-oh": "Vitamin D",
+        "vitamin d 25-oh": "Vitamin D",
+        "vitamin d,25-oh": "Vitamin D",
+        "25-oh vitamin d": "Vitamin D",
     }
     return aliases.get(compact, title_case_name(compact))
 

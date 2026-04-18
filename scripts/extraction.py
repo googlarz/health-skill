@@ -176,37 +176,76 @@ def read_document_text(path: Path, page_limit: int = 10) -> str:
     return read_document_text_with_mode(path, page_limit=page_limit)[0]
 
 
+def extract_document_date(raw_text: str) -> str:
+    """Extract a date from document headers and return ISO format (YYYY-MM-DD).
+
+    Looks for patterns like:
+    - Date Collected: MM/DD/YYYY or YYYY-MM-DD
+    - Specimen Collected: MM/DD/YYYY
+    - Date: MM/DD/YYYY
+    - Date of Service: MM/DD/YYYY
+    - Report Date: MM/DD/YYYY
+    """
+    date_patterns = [
+        re.compile(
+            r"(?:Date\s+Collected|Specimen\s+Collected|Date\s+of\s+Service|Report\s+Date|Date)\s*:\s*"
+            r"(\d{1,2})/(\d{1,2})/(\d{4})",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:Date\s+Collected|Specimen\s+Collected|Date\s+of\s+Service|Report\s+Date|Date)\s*:\s*"
+            r"(\d{4})-(\d{1,2})-(\d{1,2})",
+            re.IGNORECASE,
+        ),
+    ]
+    for pattern in date_patterns:
+        match = pattern.search(raw_text)
+        if match:
+            groups = match.groups()
+            if len(groups[0]) == 4:
+                # YYYY-MM-DD format
+                year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
+            else:
+                # MM/DD/YYYY format
+                month, day, year = int(groups[0]), int(groups[1]), int(groups[2])
+            try:
+                return date(year, month, day).isoformat()
+            except ValueError:
+                continue
+    return ""
+
+
 
 
 def extract_lab_candidates(raw_text: str, source_date: str) -> list[dict[str, Any]]:
     candidates = []
     # Pattern 1: standard space-separated lab lines (named groups)
     _LAB_PATTERN_1 = re.compile(
-        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s+(?P<value>-?\d+(?:\.\d+)?)\s*(?P<unit>[A-Za-z%/]+)"
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+,-]{1,40}?)\s+(?P<value>-?\d+(?:\.\d+)?)\s*(?P<unit>[A-Za-z%/]+)"
         r"(?:\s*\(?\s*(?P<low>-?\d+(?:\.\d+)?)\s*-\s*(?P<high>-?\d+(?:\.\d+)?)\s*\)?)?"
         r"(?:\s+(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
         flags=re.IGNORECASE,
     )
     # Pattern 2: tab-separated, < or > prefixed values, multi-word test names (named groups)
     _LAB_PATTERN_2 = re.compile(
-        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,60}?)"  # test name (wider)
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+,-]{1,60}?)"  # test name (wider)
         r"(?:\t|  +)"  # tab or 2+ spaces separator
         r"(?P<value>[<>]?\s*-?\d+(?:\.\d+)?)\s*"  # value with optional < or >
         r"(?P<unit>[A-Za-z%/]+)"  # unit
-        r"(?:\s*\(?\s*(?P<low>-?\d+(?:\.\d+)?)\s*-\s*(?P<high>-?\d+(?:\.\d+)?)\s*\)?)?"  # optional range
+        r"(?:\s*\(?\s*(?P<ref_range>[<>]?\s*-?\d+(?:\.\d+)?(?:\s*-\s*-?\d+(?:\.\d+)?)?)\s*\)?)?"  # optional range (low-high or <X or >X)
         r"(?:\s+(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
         flags=re.IGNORECASE,
     )
     # Pattern 3: parenthetical ranges like "LDL 162 mg/dL (goal <100)" or "TSH 4.5 mIU/L (0.4-4.0)"
     _LAB_PATTERN_3 = re.compile(
-        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s+"
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+,-]{1,40}?)\s+"
         r"(?P<value>-?\d+(?:\.\d+)?)\s*(?P<unit>[A-Za-z%/]+)\s*"
         r"\(\s*(?:goal\s*)?(?P<range_spec>[<>]?\s*-?\d+(?:\.\d+)?(?:\s*-\s*-?\d+(?:\.\d+)?)?)\s*\)\s*$",
         flags=re.IGNORECASE,
     )
     # Pattern 4: semicolon-delimited CSV export fields
     _LAB_PATTERN_4 = re.compile(
-        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+-]{1,40}?)\s*;\s*"
+        r"^\s*(?P<name>[A-Za-z][A-Za-z0-9 ()/%+,-]{1,40}?)\s*;\s*"
         r"(?P<value>-?\d+(?:\.\d+)?)\s*;\s*(?P<unit>[A-Za-z%/]+)"
         r"(?:\s*;\s*(?P<low>-?\d+(?:\.\d+)?)\s*-\s*(?P<high>-?\d+(?:\.\d+)?))?"
         r"(?:\s*;\s*(?P<flag>[HLN]|high|low|normal|abnormal))?\s*$",
@@ -250,9 +289,36 @@ def extract_lab_candidates(raw_text: str, source_date: str) -> list[dict[str, An
         name = groups["name"]
         value = groups["value"]
         unit = groups["unit"]
-        low = groups["low"]
-        high = groups["high"]
-        raw_flag = groups["flag"]
+        low = groups.get("low")
+        high = groups.get("high")
+        raw_flag = groups.get("flag")
+        # Handle pattern 2's ref_range group (can be <X, >X, or low-high)
+        if low is None and high is None and "ref_range" in groups and groups["ref_range"]:
+            ref_range_str = groups["ref_range"].strip()
+            range_dash = re.match(r"(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)", ref_range_str)
+            if range_dash:
+                low = range_dash.group(1)
+                high = range_dash.group(2)
+            else:
+                lt = re.match(r"<\s*(-?\d+(?:\.\d+)?)", ref_range_str)
+                gt = re.match(r">\s*(-?\d+(?:\.\d+)?)", ref_range_str)
+                if lt:
+                    high = lt.group(1)
+                elif gt:
+                    low = gt.group(1)
+        # Post-processing: check if remaining line text has <X or >X reference range
+        # This handles cases where pattern 1 matched but missed single-bound ranges
+        if low is None and high is None:
+            remainder_text = stripped[match.end() if hasattr(match, 'end') else 0:]
+            # Also scan the original line for <X or >X after the unit
+            single_bound = re.search(r'(?:^|\s)([<>])\s*(\d+(?:\.\d+)?)', stripped[len(name):])
+            if single_bound:
+                bound_char = single_bound.group(1)
+                bound_val = single_bound.group(2)
+                if bound_char == '<':
+                    high = bound_val
+                elif bound_char == '>':
+                    low = bound_val
         if len(name.strip()) < 2:
             continue
         # Strip < or > prefix for numeric comparison but keep in stored value
@@ -269,6 +335,10 @@ def extract_lab_candidates(raw_text: str, source_date: str) -> list[dict[str, An
         reference_range = ""
         if low is not None and high is not None:
             reference_range = f"{low}-{high} {unit}"
+        elif high is not None:
+            reference_range = f"<{high} {unit}"
+        elif low is not None:
+            reference_range = f">{low} {unit}"
         candidates.append(
             {
                 "section": "recent_tests",
@@ -369,7 +439,7 @@ def extract_medication_candidates(raw_text: str, doc_type: str) -> list[dict[str
         # Pattern 1: space between dose number and unit (e.g. "Lisinopril 10 mg daily")
         match = re.match(
             r"^\s*([A-Za-z][A-Za-z0-9/-]*(?: (?:ER|XR|SR|CR|[A-Za-z0-9/-]+)){0,3})\s+"
-            r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)\b(.*)$",
+            r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?|IU|iu)\b(.*)$",
             stripped,
             flags=re.IGNORECASE,
         )
@@ -377,7 +447,7 @@ def extract_medication_candidates(raw_text: str, doc_type: str) -> list[dict[str
         if not match:
             match = re.match(
                 r"^\s*([A-Za-z][A-Za-z0-9/-]*(?: (?:ER|XR|SR|CR|[A-Za-z0-9/-]+)){0,3})\s+"
-                r"(\d+(?:\.\d+)?)(mg|mcg|g|ml|units?)\b(.*)$",
+                r"(\d+(?:\.\d+)?)(mg|mcg|g|ml|units?|IU|iu)\b(.*)$",
                 stripped,
                 flags=re.IGNORECASE,
             )
@@ -386,7 +456,7 @@ def extract_medication_candidates(raw_text: str, doc_type: str) -> list[dict[str
             match = re.match(
                 r"^\s*(?:take|use|apply|inject)\s+"
                 r"([A-Za-z][A-Za-z0-9/-]*(?: (?:ER|XR|SR|CR|[A-Za-z0-9/-]+)){0,3})\s+"
-                r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)\b(.*)$",
+                r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?|IU|iu)\b(.*)$",
                 stripped,
                 flags=re.IGNORECASE,
             )
@@ -415,10 +485,10 @@ def extract_medication_candidates(raw_text: str, doc_type: str) -> list[dict[str
                     "dose": re.sub(r"\s+", " ", dose),
                     "form": form,
                     "frequency": frequency,
-                    "status": "needs-confirmation",
+                    "status": "active" if doc_type in {"medication-list", "discharge", "visit-note"} else "needs-confirmation",
                 },
-                "confidence": "high" if doc_type == "medication-list" else "medium",
-                "auto_apply": doc_type == "medication-list",
+                "confidence": "high" if doc_type in {"medication-list", "discharge", "visit-note"} and amount else "medium",
+                "auto_apply": doc_type in {"medication-list", "discharge", "visit-note"} and bool(amount),
                 "rationale": "Medication-style line with dose detected in source document.",
                 "source_snippet": stripped,
             }
@@ -545,23 +615,36 @@ def extract_follow_up_candidates(raw_text: str) -> list[dict[str, Any]]:
         if not is_follow_up:
             continue
 
+        # Filter junk: too short, table headers, or non-follow-up prefixes
+        if len(stripped) <= 15:
+            continue
+        if re.search(r"  {2,}|\t", stripped):
+            continue
+        if re.match(r"^(?:Comments:|Patient was|Test\b)", stripped, re.IGNORECASE):
+            continue
+
         # Try to extract a due date
         due_date = _parse_relative_date(lowered) or _parse_absolute_date(stripped)
+        # Strip leading bullet/dash/number prefixes from task text
+        task_text = re.sub(r"^(?:[-*]\s+|\d+\.\s+)", "", stripped)
         candidate: dict[str, Any] = {
-            "task": stripped,
+            "task": task_text,
             "status": "needs-review",
         }
         if due_date:
             candidate["due_date"] = due_date
         if specialist_name:
             candidate["specialist"] = specialist_name
+        # Auto-apply follow-ups that have a clear action verb and/or due date
+        has_action = any(v in lowered for v in ("recheck", "repeat", "schedule", "follow up", "follow-up"))
+        is_actionable = has_action or due_date is not None
         candidates.append(
             {
                 "section": "follow_up",
                 "candidate": candidate,
-                "confidence": "medium",
-                "auto_apply": False,
-                "rationale": "Follow-up style instruction detected in source document.",
+                "confidence": "high" if is_actionable else "medium",
+                "auto_apply": is_actionable,
+                "rationale": "Follow-up instruction detected in clinical document.",
                 "source_snippet": stripped,
             }
         )
@@ -634,9 +717,35 @@ def _infer_severity(reaction_text: str) -> str:
     return ""
 
 
+def _find_section_lines(raw_text: str, header: str) -> set[int]:
+    """Return line numbers (0-based) that fall under a given section header."""
+    lines = raw_text.splitlines()
+    in_section = False
+    result: set[int] = set()
+    header_lower = header.lower()
+    for i, line in enumerate(lines):
+        stripped = line.strip().lower()
+        if stripped.startswith(header_lower):
+            in_section = True
+            continue
+        if in_section:
+            # Stop at the next section header (uppercase word followed by colon)
+            if re.match(r"^[A-Z][A-Za-z ]+:", line.strip()) and not stripped.startswith(header_lower):
+                in_section = False
+                continue
+            if stripped:
+                result.add(i)
+    return result
+
+
 def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
     """Extract allergy mentions from document text (Item 9 + Item 8 severity)."""
     candidates = []
+
+    # Determine which lines are under ASSESSMENT/DIAGNOSIS sections to exclude them
+    assessment_lines: set[int] = set()
+    for header in ("ASSESSMENT:", "DIAGNOSIS:", "ASSESSMENT", "DIAGNOSIS"):
+        assessment_lines |= _find_section_lines(raw_text, header)
 
     # NKDA = No Known Drug Allergies — special case: note, not an allergy entry
     if re.search(r"\bNKDA\b", raw_text):
@@ -656,9 +765,58 @@ def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
             }
         )
 
+    # Header-list pattern: "ALLERGIES: Penicillin (rash), Codeine (nausea)"
+    header_list_pattern = re.compile(
+        r"(?:ALLERGIES|Allergies)\s*:\s*(.+)",
+        re.IGNORECASE,
+    )
+    seen_substances: set[str] = set()
+
+    for line_match in header_list_pattern.finditer(raw_text):
+        # Check this line is not under an ASSESSMENT/DIAGNOSIS section
+        line_start = raw_text[:line_match.start()].count("\n")
+        if line_start in assessment_lines:
+            continue
+        items_text = line_match.group(1).strip()
+        # Split on commas, handling parenthetical content
+        # Use regex to split properly: "Penicillin (rash), Codeine (nausea)"
+        allergy_items = re.split(r",\s*(?=[A-Za-z])", items_text)
+        for item in allergy_items:
+            item = item.strip().rstrip(",;.")
+            if not item or len(item) < 2:
+                continue
+            # Check for parenthetical reaction
+            paren_match = re.match(r"([A-Za-z][A-Za-z0-9 /-]+?)\s*\(\s*([^)]+)\s*\)", item)
+            if paren_match:
+                substance = paren_match.group(1).strip()
+                reaction = paren_match.group(2).strip()
+            else:
+                substance = item
+                reaction = ""
+            sub_key = substance.lower()
+            if sub_key in seen_substances or sub_key == "nkda":
+                continue
+            seen_substances.add(sub_key)
+            severity = _infer_severity(reaction) if reaction else ""
+            candidates.append(
+                {
+                    "section": "allergies",
+                    "candidate": {
+                        "substance": substance,
+                        "reaction": reaction,
+                        "severity_level": severity,
+                        "reaction_type": "drug" if reaction else "unknown",
+                    },
+                    "confidence": "high",
+                    "auto_apply": True,
+                    "rationale": "Allergy from ALLERGIES header list in clinical document.",
+                    "source_snippet": line_match.group(0).strip(),
+                }
+            )
+
     # Pattern for parenthetical severity: "Penicillin (anaphylaxis)"
     paren_pattern = re.compile(
-        r"(?:allergic to|allergy:\s*|allergies:\s*|adverse reaction to)?\s*"
+        r"(?:allergic to|allergy:\s*|adverse reaction to)\s*"
         r"([A-Za-z][A-Za-z0-9 /-]{1,60}?)\s*\(\s*([^)]+)\s*\)",
         re.IGNORECASE | re.MULTILINE,
     )
@@ -666,16 +824,18 @@ def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
     # General allergy patterns
     allergy_patterns = [
         re.compile(
-            r"(?:allergic to|allergy:\s*|allergies:\s*|adverse reaction to)\s+"
+            r"(?:allergic to|allergy:\s*|adverse reaction to)\s+"
             r"([A-Za-z][A-Za-z0-9 ,/-]{1,80}?)(?:\s*[-\u2013(]\s*(.+?)[\s)]*)?$",
             re.IGNORECASE | re.MULTILINE,
         ),
     ]
 
-    seen_substances: set[str] = set()
-
     # First pass: parenthetical severity pattern
     for match in paren_pattern.finditer(raw_text):
+        # Skip matches under ASSESSMENT/DIAGNOSIS sections
+        line_num = raw_text[:match.start()].count("\n")
+        if line_num in assessment_lines:
+            continue
         substance = match.group(1).strip().rstrip(",;.")
         reaction = match.group(2).strip().rstrip(",;.)")
         if len(substance) < 2 or substance.lower() == "nkda":
@@ -707,6 +867,10 @@ def extract_allergy_candidates(raw_text: str) -> list[dict[str, Any]]:
     # Second pass: general allergy patterns
     for pattern in allergy_patterns:
         for match in pattern.finditer(raw_text):
+            # Skip matches under ASSESSMENT/DIAGNOSIS sections
+            line_num = raw_text[:match.start()].count("\n")
+            if line_num in assessment_lines:
+                continue
             substance = match.group(1).strip().rstrip(",;.")
             reaction = (match.group(2) or "").strip().rstrip(",;.)")
             if len(substance) < 2:
@@ -740,28 +904,34 @@ def extract_condition_candidates(raw_text: str) -> list[dict[str, Any]]:
 
     # Look for section headers then capture lines underneath
     section_pattern = re.compile(
-        r"(?:diagnosis|assessment|problem list|active problems)\s*[:\-]?\s*\n((?:.+\n?){1,20})",
+        r"(?P<header>diagnosis|assessment|problem list|active problems)\s*[:\-]?\s*\n((?:.+\n?){1,20})",
         re.IGNORECASE,
     )
     # ICD-like code pattern: letter followed by digits, optionally dot + digits
     icd_pattern = re.compile(r"\b([A-Z]\d{2}(?:\.\d{1,4})?)\b")
 
     for section_match in section_pattern.finditer(raw_text):
-        block = section_match.group(1)
+        header_text = section_match.group("header").lower()
+        is_assessment_section = header_text in {"assessment", "diagnosis"}
+        block = section_match.group(2)
         for line in block.splitlines():
             stripped = line.strip()
             if not stripped or len(stripped) < 3:
                 continue
             # Stop at next section header
-            if re.match(r"^[A-Z][a-z]+(\s+[A-Za-z]+){0,3}\s*:", stripped):
+            if re.match(r"^[A-Z][A-Za-z ]+:", stripped):
                 break
             icd_match = icd_pattern.search(stripped)
             icd_code = icd_match.group(1) if icd_match else ""
-            # Clean up line: remove bullets, numbering
+            # Clean up line: remove bullets, numbering, leading "- "
             name = re.sub(r"^[\d.)\-*\u2022]+\s*", "", stripped)
             # Remove ICD code from name if present
             if icd_code:
                 name = name.replace(icd_code, "").strip(" -,()")
+            # Extract parenthetical details but keep just the condition name
+            paren_match = re.match(r"^([A-Za-z][A-Za-z0-9 ,/-]+?)\s*\(.*\)\s*$", name)
+            if paren_match:
+                name = paren_match.group(1).strip()
             if len(name) < 3:
                 continue
             candidate_data: dict[str, Any] = {
@@ -774,8 +944,8 @@ def extract_condition_candidates(raw_text: str) -> list[dict[str, Any]]:
                 {
                     "section": "conditions",
                     "candidate": candidate_data,
-                    "confidence": "medium",
-                    "auto_apply": False,
+                    "confidence": "high" if is_assessment_section else "medium",
+                    "auto_apply": is_assessment_section,
                     "rationale": "Condition/diagnosis detected under assessment or problem list.",
                     "source_snippet": stripped,
                 }
@@ -1027,13 +1197,14 @@ def process_inbox(
         filename_guess = infer_doc_type(source_path)
         raw_text = read_document_text(source_path, page_limit=page_limit)
         doc_type = classify_document_content(raw_text, filename_guess)
+        extracted_date = extract_document_date(raw_text)
         archived_path, note_path = ingest_document(
             root,
             person_id,
             source_path,
             doc_type,
             title=humanize_name(source_path.stem),
-            source_date="",
+            source_date=extracted_date,
             page_limit=page_limit,
         )
         processed.append((archived_path, note_path))

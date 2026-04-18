@@ -1028,8 +1028,9 @@ def command_query_dashboard(args: argparse.Namespace) -> int:
             try:
                 html_path = generate_query_dashboard_artifact(root, args.person_id, args.query)
                 print(html_path)
-            except Exception:
-                pass
+            except Exception as e:
+                import sys
+                print(f"[warn] HTML generation failed: {e}", file=sys.stderr)
 
         if save:
             save_dashboard_to_cache(
