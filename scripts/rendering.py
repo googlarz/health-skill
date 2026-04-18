@@ -2472,6 +2472,20 @@ def refresh_views(root: Path, person_id: str) -> tuple[Path, Path]:
         render_medication_reconciliation_text(profile, conflicts, review_queue, medication_history),
     )
 
+    # Generate HTML artifact (default alongside markdown)
+    try:
+        from .artifacts import generate_health_home_artifact
+    except ImportError:
+        try:
+            from artifacts import generate_health_home_artifact
+        except ImportError:
+            generate_health_home_artifact = None  # type: ignore[assignment]
+    if generate_health_home_artifact is not None:
+        try:
+            generate_health_home_artifact(root, person_id)
+        except Exception:
+            pass  # HTML generation is best-effort, never blocks markdown
+
     return summary_path(root, person_id), dossier_path(root, person_id)
 
 

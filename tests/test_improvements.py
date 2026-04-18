@@ -988,5 +988,67 @@ class VisualOutputTests(unittest.TestCase):
         self.assertTrue("✅" in text or "⚠️" in text)
 
 
+class HtmlArtifactTests(unittest.TestCase):
+    """HTML artifact generation."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        ensure_person(self.root, "", "Jane Doe")
+        upsert_record(self.root, "", "conditions", {"name": "Hypertension"})
+        upsert_record(self.root, "", "medications", {
+            "name": "Atorvastatin", "dose": "10 mg", "status": "active",
+        })
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "180", "unit": "mg/dL",
+            "date": "2026-03-01", "flag": "high", "reference_range": "0-99 mg/dL",
+        })
+        upsert_record(self.root, "", "recent_tests", {
+            "name": "LDL", "value": "160", "unit": "mg/dL",
+            "date": "2026-04-01", "flag": "high", "reference_range": "0-99 mg/dL",
+        })
+        record_weight(self.root, "", "2026-03-01", 80.0, "kg", "")
+        record_weight(self.root, "", "2026-04-01", 78.5, "kg", "")
+        record_vital(self.root, "", "2026-03-01", "blood_pressure", "132/84", "mmHg")
+        record_vital(self.root, "", "2026-04-01", "blood_pressure", "128/80", "mmHg")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_health_home_html_generated(self) -> None:
+        from scripts.artifacts import generate_health_home_artifact
+        path = generate_health_home_artifact(self.root, "")
+        self.assertTrue(path.exists())
+        content = path.read_text(encoding="utf-8")
+        self.assertIn("<!DOCTYPE html>", content)
+        self.assertIn("Jane Doe", content)
+        self.assertIn("svg", content)  # SVG charts
+        self.assertIn("LDL", content)
+
+    def test_query_dashboard_html_generated(self) -> None:
+        from scripts.artifacts import generate_query_dashboard_artifact
+        path = generate_query_dashboard_artifact(self.root, "", "how are my labs?")
+        self.assertTrue(path.exists())
+        content = path.read_text(encoding="utf-8")
+        self.assertIn("<!DOCTYPE html>", content)
+        self.assertIn("labs", content.lower())
+        self.assertIn("LDL", content)
+
+    def test_refresh_views_generates_html(self) -> None:
+        from scripts.rendering import refresh_views
+        refresh_views(self.root, "")
+        html_path = self.root / "HEALTH_HOME.html"
+        self.assertTrue(html_path.exists())
+        content = html_path.read_text(encoding="utf-8")
+        self.assertIn("<!DOCTYPE html>", content)
+
+    def test_html_has_svg_chart_for_trend(self) -> None:
+        from scripts.artifacts import generate_health_home_artifact
+        path = generate_health_home_artifact(self.root, "")
+        content = path.read_text(encoding="utf-8")
+        self.assertIn("<svg", content)
+        self.assertIn("polyline", content)  # line chart
+
+
 if __name__ == "__main__":
     unittest.main()

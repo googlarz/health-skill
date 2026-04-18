@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Karen Mitchell — Health Home</title>
+<style>
+:root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+    --purple: #a78bfa;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
+h2 { font-size: 1.2rem; font-weight: 600; color: var(--accent); margin: 24px 0 12px; }
+h3 { font-size: 1rem; font-weight: 600; margin: 16px 0 8px; }
+.subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; }
+.status-bar {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    padding: 12px 16px; background: var(--surface);
+    border-radius: 12px; margin-bottom: 24px;
+}
+.chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500;
+}
+.chip-ok { background: rgba(74,222,128,0.15); color: var(--green); }
+.chip-warn { background: rgba(251,191,36,0.15); color: var(--yellow); }
+.chip-alert { background: rgba(248,113,113,0.15); color: var(--red); }
+.card {
+    background: var(--surface); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 16px;
+    border: 1px solid var(--border);
+}
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.card-title { font-weight: 600; }
+.card-badge {
+    font-size: 0.75rem; padding: 2px 8px; border-radius: 10px;
+    background: var(--surface2); color: var(--text-muted);
+}
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.metric-card {
+    background: var(--surface); border-radius: 10px; padding: 14px 16px;
+    border: 1px solid var(--border); text-align: center;
+}
+.metric-value { font-size: 1.6rem; font-weight: 700; }
+.metric-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+.metric-delta { font-size: 0.85rem; margin-top: 4px; }
+.delta-good { color: var(--green); }
+.delta-bad { color: var(--red); }
+.delta-neutral { color: var(--text-muted); }
+ul { list-style: none; padding: 0; }
+li { padding: 6px 0; border-bottom: 1px solid var(--surface2); display: flex; align-items: center; gap: 8px; }
+li:last-child { border-bottom: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-green { background: var(--green); }
+.dot-yellow { background: var(--yellow); }
+.dot-red { background: var(--red); }
+.dot-gray { background: var(--text-muted); }
+.flag-high { color: var(--red); font-weight: 600; }
+.flag-low { color: var(--orange); font-weight: 600; }
+.flag-normal { color: var(--green); }
+svg { display: block; margin: 8px 0; }
+.chart-container { padding: 8px 0; }
+.stale-banner {
+    background: rgba(251,191,36,0.1); border: 1px solid var(--yellow);
+    border-radius: 8px; padding: 10px 16px; margin-bottom: 16px;
+    color: var(--yellow); font-size: 0.9rem;
+}
+.section-divider { border: none; border-top: 1px solid var(--surface2); margin: 20px 0; }
+.tag {
+    display: inline-block; font-size: 0.75rem; padding: 2px 8px;
+    border-radius: 6px; margin-right: 4px;
+}
+.tag-active { background: rgba(74,222,128,0.15); color: var(--green); }
+.tag-pending { background: rgba(251,191,36,0.15); color: var(--yellow); }
+.tag-alert { background: rgba(248,113,113,0.15); color: var(--red); }
+footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--surface2); color: var(--text-muted); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>Karen Mitchell</h1>
+<div class="subtitle">Health Home &middot; 2026-04-18</div>
+<div class="status-bar">
+<span class="chip chip-warn">! 1 file(s) in inbox</span>
+<span class="chip chip-ok">✓ No items need review</span>
+<span class="chip chip-ok">✓ No conflicts</span>
+<span class="chip chip-ok">✓ No overdue follow-ups</span>
+</div>
+<div class="grid">
+<div class="metric-card">
+        <div class="metric-value">3</div>
+        <div class="metric-label">Active Conditions</div>
+    </div>
+<div class="metric-card">
+        <div class="metric-value">3</div>
+        <div class="metric-label">Medications</div>
+    </div>
+<div class="metric-card">
+            <div class="metric-value">76.1</div>
+            <div class="metric-label">Weight (kg)</div>
+            <div class="metric-delta delta-good">-2.1 kg (-2.7%)</div>
+        </div>
+<div class="metric-card">
+        <div class="metric-value">3</div>
+        <div class="metric-label">Pending Follow-ups</div>
+    </div>
+</div>
+<h2>Right Now</h2>
+<div class="card"><ul>
+<li><span class='dot dot-yellow'></span>Process 1 file(s) sitting in inbox.</li>
+<li><span class='dot dot-yellow'></span>Keep an eye on abnormal labs: LDL 141 mg/dL, Vitamin D 28 ng/mL, LDL 162 mg/dL</li>
+</ul></div>
+<h2>Next Follow-Up</h2>
+<div class="card">
+<strong>Cardiology follow-up with Dr. Park</strong><br>
+<span class="tag tag-pending">due 2026-05-08</span>
+</div>
+<h2>LDL</h2>
+<div class="card">
+<div class="card-header"><span class="card-title">141 mg/dL</span>
+<span class="flag-high">high</span>
+</div>
+<div style="color:var(--text-muted);font-size:0.85rem">Reference: 0-99 mg/dL</div>
+<div class="chart-container">
+<svg viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;height:auto;">
+<rect x="50" y="61.70212765957447" width="300" height="38.29787234042553" fill="rgba(74,222,128,0.08)" rx="4"/>
+<line x1="50" y1="20.0" x2="350" y2="20.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="24.0" text-anchor="end" fill="#94a3b8" font-size="10">207</text>
+<line x1="50" y1="40.0" x2="350" y2="40.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="44.0" text-anchor="end" fill="#94a3b8" font-size="10">155</text>
+<line x1="50" y1="60.0" x2="350" y2="60.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="64.0" text-anchor="end" fill="#94a3b8" font-size="10">103</text>
+<line x1="50" y1="80.0" x2="350" y2="80.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="84.0" text-anchor="end" fill="#94a3b8" font-size="10">52</text>
+<line x1="50" y1="100.0" x2="350" y2="100.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="104.0" text-anchor="end" fill="#94a3b8" font-size="10">0</text>
+<polyline points="50.0,27.272727272727273 200.0,37.33075435203095 350.0,45.45454545454546" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="50.0" cy="27.272727272727273" r="4" fill="#f87171"/>
+<text x="50.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">09-15</text>
+<text x="50.0" y="17.272727272727273" text-anchor="middle" fill="#f87171" font-size="11" font-weight="600">188</text>
+<circle cx="200.0" cy="37.33075435203095" r="4" fill="#f87171"/>
+<text x="200.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">12-10</text>
+<text x="200.0" y="27.33075435203095" text-anchor="middle" fill="#f87171" font-size="11" font-weight="600">162</text>
+<circle cx="350.0" cy="45.45454545454546" r="4" fill="#f87171"/>
+<text x="350.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">03-18</text>
+<text x="350.0" y="35.45454545454546" text-anchor="middle" fill="#f87171" font-size="11" font-weight="600">141</text>
+</svg>
+</div></div>
+<h2>Weight</h2>
+<div class="card"><div class="chart-container">
+<svg viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;height:auto;">
+<line x1="50" y1="20.0" x2="350" y2="20.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="24.0" text-anchor="end" fill="#94a3b8" font-size="10">86</text>
+<line x1="50" y1="40.0" x2="350" y2="40.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="44.0" text-anchor="end" fill="#94a3b8" font-size="10">82</text>
+<line x1="50" y1="60.0" x2="350" y2="60.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="64.0" text-anchor="end" fill="#94a3b8" font-size="10">77</text>
+<line x1="50" y1="80.0" x2="350" y2="80.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="84.0" text-anchor="end" fill="#94a3b8" font-size="10">73</text>
+<line x1="50" y1="100.0" x2="350" y2="100.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="104.0" text-anchor="end" fill="#94a3b8" font-size="10">68</text>
+<polyline points="50.0,55.687393040502 150.0,58.88191671420423 250.0,62.07644038790647 350.0,65.27096406160871" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="50.0" cy="55.687393040502" r="4" fill="#a78bfa"/>
+<text x="50.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">01-05</text>
+<text x="50.0" y="45.687393040502" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">78</text>
+<circle cx="150.0" cy="58.88191671420423" r="4" fill="#a78bfa"/>
+<text x="150.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">02-01</text>
+<text x="150.0" y="48.88191671420423" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">78</text>
+<circle cx="250.0" cy="62.07644038790647" r="4" fill="#a78bfa"/>
+<text x="250.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">03-01</text>
+<text x="250.0" y="52.07644038790647" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">77</text>
+<circle cx="350.0" cy="65.27096406160871" r="4" fill="#a78bfa"/>
+<text x="350.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">04-01</text>
+<text x="350.0" y="55.27096406160871" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">76</text>
+</svg>
+</div></div>
+<h2>Blood Pressure</h2>
+<div class="card"><div class="chart-container">
+<svg viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;height:auto;">
+<line x1="50" y1="20.0" x2="350" y2="20.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="24.0" text-anchor="end" fill="#94a3b8" font-size="10">156</text>
+<line x1="50" y1="40.0" x2="350" y2="40.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="44.0" text-anchor="end" fill="#94a3b8" font-size="10">145</text>
+<line x1="50" y1="60.0" x2="350" y2="60.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="64.0" text-anchor="end" fill="#94a3b8" font-size="10">134</text>
+<line x1="50" y1="80.0" x2="350" y2="80.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="84.0" text-anchor="end" fill="#94a3b8" font-size="10">123</text>
+<line x1="50" y1="100.0" x2="350" y2="100.0" stroke="#334155" stroke-width="0.5"/>
+<text x="42" y="104.0" text-anchor="end" fill="#94a3b8" font-size="10">112</text>
+<polyline points="50.0,45.47085201793725 150.0,56.233183856502265 250.0,70.58295964125563 350.0,77.75784753363232" fill="none" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="50.0" cy="45.47085201793725" r="4" fill="#fb923c"/>
+<text x="50.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">01-10</text>
+<text x="50.0" y="35.47085201793725" text-anchor="middle" fill="#fb923c" font-size="11" font-weight="600">142</text>
+<circle cx="150.0" cy="56.233183856502265" r="4" fill="#fb923c"/>
+<text x="150.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">02-15</text>
+<text x="150.0" y="46.233183856502265" text-anchor="middle" fill="#fb923c" font-size="11" font-weight="600">136</text>
+<circle cx="250.0" cy="70.58295964125563" r="4" fill="#fb923c"/>
+<text x="250.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">03-20</text>
+<text x="250.0" y="60.58295964125563" text-anchor="middle" fill="#fb923c" font-size="11" font-weight="600">128</text>
+<circle cx="350.0" cy="77.75784753363232" r="4" fill="#fb923c"/>
+<text x="350.0" y="116" text-anchor="middle" fill="#94a3b8" font-size="9">04-10</text>
+<text x="350.0" y="67.75784753363232" text-anchor="middle" fill="#fb923c" font-size="11" font-weight="600">124</text>
+</svg>
+</div></div>
+<h2>Abnormal Results</h2>
+<div class="card"><ul>
+<li>
+                <span class="dot dot-red" ></span>
+                <strong>LDL</strong> 141 mg/dL
+                <span class="flag-high">high</span>
+                <span style="color:var(--text-muted);margin-left:auto;font-size:0.85rem">2026-03-18</span>
+            </li>
+<li>
+                <span class="dot dot-yellow" ></span>
+                <strong>Vitamin D</strong> 28 ng/mL
+                <span class="flag-low">low</span>
+                <span style="color:var(--text-muted);margin-left:auto;font-size:0.85rem">2026-03-18</span>
+            </li>
+<li>
+                <span class="dot dot-red" ></span>
+                <strong>LDL</strong> 162 mg/dL
+                <span class="flag-high">high</span>
+                <span style="color:var(--text-muted);margin-left:auto;font-size:0.85rem">2025-12-10</span>
+            </li>
+<li>
+                <span class="dot dot-red" ></span>
+                <strong>LDL</strong> 188 mg/dL
+                <span class="flag-high">high</span>
+                <span style="color:var(--text-muted);margin-left:auto;font-size:0.85rem">2025-09-15</span>
+            </li>
+</ul></div>
+<h2>Medications</h2>
+<div class="card"><ul>
+<li>
+                <strong>Atorvastatin</strong> 20 mg nightly
+                <span class="tag tag-active">active</span>
+            </li>
+<li>
+                <strong>Lisinopril</strong> 10 mg daily
+                <span class="tag tag-active">active</span>
+            </li>
+<li>
+                <strong>Vitamin D3</strong> 2000 IU daily
+                <span class="tag tag-active">active</span>
+            </li>
+</ul></div>
+<h2>Allergies</h2>
+<div class="card"><ul>
+<li>
+                <span class="dot dot-yellow"></span>
+                <strong>Sulfa drugs</strong> — hives
+                <span class="tag tag-alert">moderate</span>
+            </li>
+<li>
+                <span class="dot dot-red"></span>
+                <strong>Shellfish</strong> — throat swelling
+                <span class="tag tag-alert">life-threatening</span>
+            </li>
+</ul></div>
+<h2>Connected Patterns</h2>
+<div class="card"><ul>
+<li><span class='dot dot-yellow'></span>LDL has moved down by 47.00 mg/dL across the recorded series.</li>
+<li><span class='dot dot-yellow'></span>LDL has been flagged abnormal on multiple recorded dates, which suggests a repeat pattern rather than a one-off result.</li>
+<li><span class='dot dot-yellow'></span>Blood pressure has been elevated in 3 recorded entries, which may be worth discussing as a repeated pattern.</li>
+<li><span class='dot dot-yellow'></span>Lisinopril is active but blood pressure has been elevated in 3 entries — worth reviewing effectiveness.</li>
+</ul></div>
+<h2>Questions To Ask</h2>
+<div class="card"><ul>
+<li>What does the recent LDL result of 141 mg/dL mean in context?</li>
+<li>What does the recent Vitamin D result of 28 ng/mL mean in context?</li>
+<li>What should we do next about: Repeat lipid panel?</li>
+<li>What should we do next about: Cardiology follow-up with Dr. Park?</li>
+</ul></div>
+<footer>Generated 2026-04-18 &middot; Health Skill &middot; Not medical advice</footer>
+</body>
+</html>

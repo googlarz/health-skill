@@ -1015,6 +1015,21 @@ def command_query_dashboard(args: argparse.Namespace) -> int:
         atomic_write_text(output_path, result.text)
         record_intent_usage(root, args.person_id, intent)
 
+        # Generate HTML artifact alongside markdown
+        try:
+            from .artifacts import generate_query_dashboard_artifact
+        except ImportError:
+            try:
+                from artifacts import generate_query_dashboard_artifact
+            except ImportError:
+                generate_query_dashboard_artifact = None  # type: ignore[assignment]
+        if generate_query_dashboard_artifact is not None:
+            try:
+                html_path = generate_query_dashboard_artifact(root, args.person_id, args.query)
+                print(html_path)
+            except Exception:
+                pass
+
         if save:
             save_dashboard_to_cache(
                 root, args.person_id,
