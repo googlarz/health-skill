@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m unittest tests.test_care_workspace -v
+      - run: python -m unittest discover tests -v
 
   typecheck:
     runs-on: ubuntu-latest
