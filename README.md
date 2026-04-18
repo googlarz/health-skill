@@ -16,111 +16,109 @@
 
 Health Skill gives Claude a **durable workspace** so it can reason across your full health picture — labs connected to medications connected to follow-ups — instead of starting from scratch every conversation.
 
-## See It In Action
+## Contents
 
-Explore the [demo workspace](examples/demo-karen/) for Karen Mitchell — a realistic example with lab trends, weight tracking, medications, and visit prep.
+- [Setup for Claude Cowork](#setup-for-claude-cowork)
+- [Setup for Claude Code](#setup-for-claude-code)
+- [What You Get](#what-you-get)
+- [Key Features](#key-features)
+- [Who This Is For](#who-this-is-for)
+- [What It Is Not](#what-it-is-not)
+- [Documentation](#documentation)
+
+---
+
+## Setup for Claude Cowork
+
+### Step 1: Install the skill
+
+Open Claude Code (terminal) and paste:
 
 ```
-# Karen's HEALTH_HOME.md
-
-⚠️ 1 file(s) in inbox | ✅ No items need review | ✅ No overdue follow-ups
-────────────────────────────────────────
-
-## Right Now
-- Process 1 file(s) sitting in inbox.
-- Keep an eye on abnormal labs: LDL 141 mg/dL, Vitamin D 28 ng/mL
-
-## LDL Trend
-- Trend: 188 → 162 → 141 ↓ (notable improvement on atorvastatin)
-
-## Weight
-- Latest: 76.1 kg | Trend: █▅▃▁ (-2.7%)
+Install the health-skill from https://github.com/googlarz/health-skill as a local skill
 ```
 
-## Installation
+Claude will clone it and set it up. That's it.
 
-### Claude Code (CLI)
+Or do it manually in one line:
 
 ```bash
-# Clone the repo
-git clone https://github.com/googlarz/health-skill.git
-cd health-skill
-
-# Install as a local skill (symlink into Claude's skills directory)
-ln -sf "$(pwd)" ~/.claude/skills/health-skill
-
-# Verify
-ls ~/.claude/skills/health-skill/SKILL.md
+git clone https://github.com/googlarz/health-skill.git ~/.claude/skills/health-skill
 ```
 
-Claude Code will now recognize `/health-skill` as an available skill. You can invoke it with `Use /health-skill` in any conversation, or reference it in your project's `CLAUDE.md`:
+### Step 2: Create a health project
 
-```md
-# CLAUDE.md
-Use /health-skill
-
-## Project Context
-This is a health workspace for Mom. One person per folder.
-```
-
-### Claude Cowork (Desktop Projects)
-
-1. **Download** the repo: `Code` → `Download ZIP` from GitHub, or clone it
-2. **Place** the `health-skill` folder somewhere stable (e.g., `~/Documents/health-skill/`)
-3. **Symlink** it into Claude's skills directory:
-   ```bash
-   ln -sf ~/Documents/health-skill ~/.claude/skills/health-skill
-   ```
-4. **Create a folder** for each person you're managing:
+1. Create a folder for each person — one person per folder:
    ```
    ~/Health/
      mom/
      dad/
      me/
    ```
-5. **Open** a person folder in Claude Cowork → `Use existing folder`
-6. **Tell Claude**: `Use /health-skill` and `Initialize this folder for Mom`
-7. **Drop** health documents (lab PDFs, discharge notes) into the `inbox/` folder
-8. **Ask Claude** to process them — it will extract labs, medications, and follow-ups automatically
+2. Open Claude Cowork → **Start new project** → **Use existing folder** → pick a person folder (e.g. `~/Health/mom/`)
+3. In the project instructions, add:
 
-Each person folder becomes a durable health workspace that Claude remembers across sessions.
+   ```
+   Use /health-skill
+
+   This is a health workspace for Mom.
+   Always read HEALTH_DOSSIER.md before answering health questions.
+   Generate a query-dashboard for every health question before responding.
+   ```
+
+4. Tell Claude: **"Initialize this folder"**
+
+That's it. The skill is now active for every conversation in that project.
+
+### Step 3: Start using it
+
+- **Drop** lab PDFs, discharge notes, or visit summaries into the `inbox/` folder
+- **Tell Claude**: "Process the inbox" — it extracts labs, medications, follow-ups automatically
+- **Ask questions**: "What do my labs mean?", "Help me prepare for my appointment", "What's overdue?"
+- Claude generates focused dashboards, tracks trends, and keeps everything organized across sessions
 
 ### Updating
 
 ```bash
-cd ~/.claude/skills/health-skill  # or wherever you cloned it
-git pull origin main
+cd ~/.claude/skills/health-skill && git pull
 ```
 
-The symlink means Claude always uses the latest version.
+---
 
-## Quick Start
+## Setup for Claude Code
 
 ```bash
+# Clone and install
+git clone https://github.com/googlarz/health-skill.git ~/.claude/skills/health-skill
+
 # Initialize a person folder
-python3 scripts/care_workspace.py init-project \
+python3 ~/.claude/skills/health-skill/scripts/care_workspace.py init-project \
   --root ~/Health/mom --name "Mom"
-
-# Drop a lab report into inbox/, then process
-python3 scripts/care_workspace.py process-inbox --root ~/Health/mom
-
-# Ask a question — get a focused dashboard
-python3 scripts/care_workspace.py query-dashboard \
-  --root ~/Health/mom --query "how are Mom's labs?" --save
 ```
 
-**Which command do I use?**
+Reference it in any project's `CLAUDE.md`:
+
+```md
+Use /health-skill
+
+This is a health workspace for Mom.
+Always read HEALTH_DOSSIER.md before answering health questions.
+```
+
+### CLI Quick Reference
 
 | I want to... | Command |
 |---|---|
-| Set up a new person folder | `init-project` |
-| Add a new document | Drop into `inbox/`, then `process-inbox` |
+| Set up a new person folder | `init-project --root . --name "Name"` |
+| Process new documents | Drop into `inbox/`, then `process-inbox --root .` |
 | See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
-| Prepare for an appointment | `query-dashboard --query "visit prep"` |
-| Ask a health question | `query-dashboard --query "your question"` |
-| Check extraction accuracy | `extraction-audit` |
+| Prepare for an appointment | `query-dashboard --root . --query "visit prep"` |
+| Ask a health question | `query-dashboard --root . --query "your question"` |
+| Check extraction accuracy | `extraction-audit --root .` |
 
 See [docs/commands.md](docs/commands.md) for the full reference.
+
+---
 
 ## What You Get
 
@@ -139,15 +137,15 @@ See [docs/files.md](docs/files.md) for the complete list.
 
 ## Key Features
 
-**Query-relevant dashboards** — Ask any health question and get a focused view with only the relevant data, not the full dossier.
+**Query-relevant dashboards** — Ask any health question and get a focused view with only the relevant data, not the full dossier. Dashboards can be saved and reused for similar future queries.
 
-**Trust-aware extraction** — Facts are labeled by confidence. OCR-derived data is flagged for review. You confirm what matters.
+**Trust-aware extraction** — Facts extracted from documents are labeled by confidence. OCR-derived data is flagged for review. You confirm what matters.
 
 **Medication safety** — Adding a medication that conflicts with a known allergy triggers a warning automatically.
 
 **Pattern detection** — Connects labs to medications to follow-ups over time. Flags stale tests, temporal side-effect correlations, and overdue follow-ups.
 
-**Extraction accuracy audit** — Tracks what was extracted vs. what you accepted/rejected, so you know which patterns are working.
+**Visual outputs** — Status chips (✅/⚠️), sparkline charts, trend arrows, and bold key numbers. Designed for scanning when tired or stressed.
 
 **Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
 
@@ -156,7 +154,6 @@ See [docs/files.md](docs/files.md) for the complete list.
 - Managing your own recurring appointments, labs, and medications
 - Helping a parent, partner, or child with health admin
 - Keeping Claude useful across months, not just one conversation
-- Anyone who cares more about continuity and organization than flashy app UX
 
 ## What It Is Not
 
@@ -165,25 +162,6 @@ See [docs/files.md](docs/files.md) for the complete list.
 - Not a replacement for emergency care or licensed clinicians
 
 See [references/safety-protocol.md](references/safety-protocol.md) for the full safety model.
-
-## Project Structure
-
-```
-health-skill/
-  SKILL.md                    # Claude runtime behavior
-  scripts/
-    care_workspace.py         # Core data model (1200 lines)
-    rendering.py              # Visual view generation (2500 lines)
-    extraction.py             # Document processing + inbox (900 lines)
-    commands.py               # CLI (1400 lines)
-    clinician_handoff.py      # Visit-specific handoffs
-    caregiver_dashboard.py    # Multi-person overview
-    apple_ocr.swift           # macOS Vision OCR
-  tests/                      # 110 tests
-  docs/                       # Setup guide, commands, file reference
-  examples/demo-karen/        # Pre-populated demo workspace
-  references/                 # Safety protocol, integration points
-```
 
 ## Documentation
 
