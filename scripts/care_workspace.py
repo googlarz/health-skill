@@ -1771,3 +1771,16 @@ def changes_since_last_session(root: Path, person_id: str) -> dict[str, Any]:
 PROJECT_ROOT: str = ""
 
 
+def main() -> int:
+    """CLI entry point — delegates to commands module."""
+    try:
+        from scripts.commands import main as commands_main
+    except ImportError:
+        from commands import main as commands_main
+    return commands_main()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+

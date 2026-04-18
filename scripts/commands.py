@@ -192,6 +192,7 @@ except ImportError:
         render_weight_trends_text,
         render_appointment_request_text,
         render_query_dashboard,
+        classify_query_intent,
     )
 
 
