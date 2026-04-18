@@ -1022,7 +1022,7 @@ class HtmlArtifactTests(unittest.TestCase):
         content = path.read_text(encoding="utf-8")
         self.assertIn("<!DOCTYPE html>", content)
         self.assertIn("Jane Doe", content)
-        self.assertIn("svg", content)  # SVG charts
+        self.assertIn("canvas", content)  # Chart.js charts
         self.assertIn("LDL", content)
 
     def test_query_dashboard_html_generated(self) -> None:
@@ -1042,12 +1042,12 @@ class HtmlArtifactTests(unittest.TestCase):
         content = html_path.read_text(encoding="utf-8")
         self.assertIn("<!DOCTYPE html>", content)
 
-    def test_html_has_svg_chart_for_trend(self) -> None:
+    def test_html_has_chartjs_for_trend(self) -> None:
         from scripts.artifacts import generate_health_home_artifact
         path = generate_health_home_artifact(self.root, "")
         content = path.read_text(encoding="utf-8")
-        self.assertIn("<svg", content)
-        self.assertIn("polyline", content)  # line chart
+        self.assertIn("<canvas", content)
+        self.assertIn("chart.js", content.lower())
 
 
 if __name__ == "__main__":

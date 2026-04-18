@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """HTML artifact generation for Health Skill dashboards.
 
-Generates self-contained single-file HTML with inline CSS and SVG charts.
-No external dependencies — works offline, renders in any browser or Claude artifact viewer.
+Generates self-contained single-file HTML with inline CSS and Chart.js charts.
+Requires CDN access for Chart.js; renders in any browser or Claude artifact viewer.
 """
 
 from __future__ import annotations
@@ -164,94 +164,68 @@ footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--surfac
 
 
 # ---------------------------------------------------------------------------
-# SVG Chart Helpers
+# Chart.js Helpers
 # ---------------------------------------------------------------------------
 
-def _svg_line_chart(
-    points: list[tuple[str, float]],
-    width: int = 400,
-    height: int = 120,
-    color: str = "#38bdf8",
+def _chart_line(
+    charts: list[tuple[str, dict]],
+    labels: list[str],
+    datasets: list[dict],
     ref_low: float | None = None,
     ref_high: float | None = None,
+    y_label: str = "",
 ) -> str:
-    """Render a simple SVG line chart with optional reference range band."""
-    if len(points) < 2:
-        return ""
-
-    values = [v for _, v in points]
-    labels = [l for l, _ in points]
-    vmin = min(values) * 0.9
-    vmax = max(values) * 1.1
-    if ref_low is not None:
-        vmin = min(vmin, ref_low * 0.9)
+    """Return canvas HTML for a Chart.js line chart; append config to *charts*."""
+    chart_id = f"chart-{len(charts)}"
+    ds = []
+    for d in datasets:
+        ds.append({
+            "label": d.get("label", ""),
+            "data": d.get("data", []),
+            "borderColor": d.get("borderColor", "#38bdf8"),
+            "backgroundColor": d.get("backgroundColor", "rgba(56,189,248,0.1)"),
+            "borderWidth": d.get("borderWidth", 2.5),
+            "pointRadius": d.get("pointRadius", 5),
+            "pointBackgroundColor": d.get("pointBackgroundColor", d.get("borderColor", "#38bdf8")),
+            "tension": d.get("tension", 0.3),
+            "fill": d.get("fill", True),
+        })
+        # Copy optional keys
+        for key in ("borderDash", "pointRadius", "order"):
+            if key in d:
+                ds[-1][key] = d[key]
+    # Reference range as a filled band
     if ref_high is not None:
-        vmax = max(vmax, ref_high * 1.1)
-    if vmax == vmin:
-        vmax = vmin + 1
-
-    pad_x, pad_y = 50, 20
-    chart_w = width - pad_x * 2
-    chart_h = height - pad_y * 2
-
-    def x_pos(i: int) -> float:
-        return pad_x + (i / (len(points) - 1)) * chart_w
-
-    def y_pos(v: float) -> float:
-        return pad_y + (1 - (v - vmin) / (vmax - vmin)) * chart_h
-
-    parts = [f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:{width}px;height:auto;">']
-
-    # Reference range band
-    if ref_low is not None and ref_high is not None:
-        ry1 = y_pos(ref_high)
-        ry2 = y_pos(ref_low)
-        parts.append(f'<rect x="{pad_x}" y="{ry1}" width="{chart_w}" height="{ry2-ry1}" fill="rgba(74,222,128,0.08)" rx="4"/>')
-
-    # Grid lines
-    for i in range(5):
-        gy = pad_y + (i / 4) * chart_h
-        gv = vmax - (i / 4) * (vmax - vmin)
-        parts.append(f'<line x1="{pad_x}" y1="{gy}" x2="{width-pad_x}" y2="{gy}" stroke="#334155" stroke-width="0.5"/>')
-        parts.append(f'<text x="{pad_x-8}" y="{gy+4}" text-anchor="end" fill="#94a3b8" font-size="10">{gv:.0f}</text>')
-
-    # Line
-    path_points = " ".join(f"{x_pos(i)},{y_pos(v)}" for i, (_, v) in enumerate(points))
-    parts.append(f'<polyline points="{path_points}" fill="none" stroke="{color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>')
-
-    # Dots and labels
-    for i, (label, v) in enumerate(points):
-        cx, cy = x_pos(i), y_pos(v)
-        parts.append(f'<circle cx="{cx}" cy="{cy}" r="4" fill="{color}"/>')
-        parts.append(f'<text x="{cx}" y="{height - 4}" text-anchor="middle" fill="#94a3b8" font-size="9">{label}</text>')
-        parts.append(f'<text x="{cx}" y="{cy - 10}" text-anchor="middle" fill="{color}" font-size="11" font-weight="600">{v:.0f}</text>')
-
-    parts.append("</svg>")
-    return "\n".join(parts)
-
-
-def _svg_bar_chart(
-    items: list[tuple[str, float]],
-    width: int = 400,
-    height: int = 100,
-    color: str = "#38bdf8",
-) -> str:
-    """Render a horizontal bar chart."""
-    if not items:
-        return ""
-    max_val = max(v for _, v in items) or 1
-    bar_h = min(24, (height - 10) // len(items))
-    parts = [f'<svg viewBox="0 0 {width} {len(items) * (bar_h + 6) + 10}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:{width}px;height:auto;">']
-
-    for i, (label, v) in enumerate(items):
-        y = i * (bar_h + 6) + 5
-        bw = max(4, (v / max_val) * (width - 120))
-        parts.append(f'<text x="0" y="{y + bar_h * 0.7}" fill="#94a3b8" font-size="11">{html.escape(label)}</text>')
-        parts.append(f'<rect x="100" y="{y}" width="{bw}" height="{bar_h}" rx="4" fill="{color}" opacity="0.8"/>')
-        parts.append(f'<text x="{105 + bw}" y="{y + bar_h * 0.7}" fill="{color}" font-size="11" font-weight="600">{v:.1f}</text>')
-
-    parts.append("</svg>")
-    return "\n".join(parts)
+        ref_data = [ref_high] * len(labels)
+        ds.append({
+            "label": "Reference Range",
+            "data": ref_data,
+            "borderColor": "rgba(74,222,128,0.3)",
+            "backgroundColor": "rgba(74,222,128,0.05)",
+            "borderWidth": 1,
+            "borderDash": [5, 5],
+            "pointRadius": 0,
+            "fill": True,
+            "tension": 0,
+        })
+    config: dict[str, Any] = {
+        "type": "line",
+        "data": {"labels": labels, "datasets": ds},
+        "options": {
+            "responsive": True,
+            "maintainAspectRatio": False,
+            "plugins": {
+                "legend": {"display": True, "labels": {"color": "#e2e8f0"}},
+                "tooltip": {"enabled": True},
+            },
+            "scales": {
+                "x": {"ticks": {"color": "#94a3b8"}, "grid": {"color": "#334155"}},
+                "y": {"ticks": {"color": "#94a3b8"}, "grid": {"color": "#334155"}},
+            },
+        },
+    }
+    charts.append((chart_id, config))
+    return f'<div style="height:220px"><canvas id="{chart_id}"></canvas></div>'
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +316,7 @@ def build_health_home_html(snap: WorkspaceSnapshot) -> str:
     nf = next_follow_up(p)
 
     # Build HTML
+    charts: list[tuple[str, dict]] = []
     sections = []
 
     # Header
@@ -430,21 +405,35 @@ def build_health_home_html(snap: WorkspaceSnapshot) -> str:
         if ref:
             sections.append(f'<div style="color:var(--text-muted);font-size:0.85rem">Reference: {_esc(ref)}</div>')
         sections.append('<div class="chart-container">')
-        sections.append(_svg_line_chart(points, color=color, ref_low=ref_low, ref_high=ref_high))
+        chart_labels = [lbl for lbl, _ in points]
+        chart_data = [v for _, v in points]
+        sections.append(_chart_line(charts, labels=chart_labels, datasets=[{
+            "label": test_name, "data": chart_data,
+            "borderColor": color, "backgroundColor": color.replace(")", ",0.1)").replace("rgb", "rgba") if "rgba" not in color else color,
+            "pointBackgroundColor": color,
+        }], ref_low=ref_low, ref_high=ref_high))
         sections.append("</div></div>")
 
     # Weight trend
     if len(weight_points) >= 2:
         sections.append("<h2>Weight</h2>")
         sections.append('<div class="card"><div class="chart-container">')
-        sections.append(_svg_line_chart(weight_points, color="#a78bfa"))
+        sections.append(_chart_line(charts, labels=[lbl for lbl, _ in weight_points], datasets=[{
+            "label": "Weight", "data": [v for _, v in weight_points],
+            "borderColor": "#a78bfa", "backgroundColor": "rgba(167,139,250,0.1)",
+            "pointBackgroundColor": "#a78bfa",
+        }]))
         sections.append("</div></div>")
 
     # Blood pressure
     if len(bp_systolic) >= 2:
         sections.append("<h2>Blood Pressure</h2>")
         sections.append('<div class="card"><div class="chart-container">')
-        sections.append(_svg_line_chart(bp_systolic, color="#fb923c"))
+        sections.append(_chart_line(charts, labels=[lbl for lbl, _ in bp_systolic], datasets=[{
+            "label": "Systolic", "data": [v for _, v in bp_systolic],
+            "borderColor": "#fb923c", "backgroundColor": "rgba(251,146,60,0.1)",
+            "pointBackgroundColor": "#fb923c",
+        }]))
         sections.append("</div></div>")
 
     # Abnormal labs
@@ -511,7 +500,7 @@ def build_health_home_html(snap: WorkspaceSnapshot) -> str:
     sections.append(f'<footer>Generated {date.today().isoformat()} &middot; Health Skill &middot; Not medical advice</footer>')
 
     body = "\n".join(sections)
-    return _wrap_html(f"{name} — Health Home", body)
+    return _wrap_html(f"{name} — Health Home", body, charts=charts)
 
 
 def build_query_dashboard_html(
@@ -525,6 +514,7 @@ def build_query_dashboard_html(
     intents = classify_query_intents(query, max_intents=2)
     title = f"Dashboard: {query}"
 
+    charts: list[tuple[str, dict]] = []
     sections = []
     sections.append(f'<h1>{_esc(query)}</h1>')
     sections.append(f'<div class="subtitle">Intent: {", ".join(intents)} &middot; {date.today().isoformat()}</div>')
@@ -564,7 +554,13 @@ def build_query_dashboard_html(
                 sections.append(f' <span class="{_flag_class(flag)}">{_esc(flag)}</span>')
             if len(points) >= 2:
                 sections.append('<div class="chart-container">')
-                sections.append(_svg_line_chart(points, color=color, ref_low=ref_low, ref_high=ref_high))
+                chart_labels = [lbl for lbl, _ in points]
+                chart_data = [v for _, v in points]
+                sections.append(_chart_line(charts, labels=chart_labels, datasets=[{
+                    "label": name, "data": chart_data,
+                    "borderColor": color, "backgroundColor": color.replace(")", ",0.1)").replace("rgb", "rgba") if "rgba" not in color else color,
+                    "pointBackgroundColor": color,
+                }], ref_low=ref_low, ref_high=ref_high))
                 sections.append("</div>")
             sections.append("</div>")
 
@@ -585,14 +581,22 @@ def build_query_dashboard_html(
         if len(bp_points) >= 2:
             sections.append("<h2>Blood Pressure</h2>")
             sections.append('<div class="card"><div class="chart-container">')
-            sections.append(_svg_line_chart(bp_points, color="#fb923c"))
+            sections.append(_chart_line(charts, labels=[lbl for lbl, _ in bp_points], datasets=[{
+                "label": "Systolic", "data": [v for _, v in bp_points],
+                "borderColor": "#fb923c", "backgroundColor": "rgba(251,146,60,0.1)",
+                "pointBackgroundColor": "#fb923c",
+            }]))
             sections.append("</div></div>")
 
         if len(snap.weight_entries) >= 2:
             wp = [(e["entry_date"][5:], e["value"]) for e in snap.weight_entries]
             sections.append("<h2>Weight</h2>")
             sections.append('<div class="card"><div class="chart-container">')
-            sections.append(_svg_line_chart(wp, color="#a78bfa"))
+            sections.append(_chart_line(charts, labels=[lbl for lbl, _ in wp], datasets=[{
+                "label": "Weight", "data": [v for _, v in wp],
+                "borderColor": "#a78bfa", "backgroundColor": "rgba(167,139,250,0.1)",
+                "pointBackgroundColor": "#a78bfa",
+            }]))
             sections.append("</div></div>")
 
     # Patterns
@@ -625,10 +629,25 @@ def build_query_dashboard_html(
 
     sections.append(f'<footer>Generated {date.today().isoformat()} &middot; Health Skill &middot; Not medical advice</footer>')
 
-    return _wrap_html(title, "\n".join(sections))
+    return _wrap_html(title, "\n".join(sections), charts=charts)
 
 
-def _wrap_html(title: str, body: str) -> str:
+def _wrap_html(title: str, body: str, charts: list[tuple[str, dict]] | None = None) -> str:
+    chart_script = ""
+    if charts:
+        charts_dict = {cid: cfg for cid, cfg in charts}
+        chart_script = (
+            '\n<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>\n'
+            "<script>\n"
+            f"const charts = {json.dumps(charts_dict)};\n"
+            "Chart.defaults.color = '#94a3b8';\n"
+            "Chart.defaults.borderColor = '#334155';\n"
+            "for (const [id, config] of Object.entries(charts)) {\n"
+            "  const ctx = document.getElementById(id);\n"
+            "  if (ctx) new Chart(ctx, config);\n"
+            "}\n"
+            "</script>\n"
+        )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -639,7 +658,7 @@ def _wrap_html(title: str, body: str) -> str:
 </head>
 <body>
 {body}
-</body>
+{chart_script}</body>
 </html>"""
 
 
