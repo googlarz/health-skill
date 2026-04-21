@@ -460,6 +460,47 @@ When user asks "what can you do", offer:
 - Medication safety checks
 - Visit prep with portal messages
 - Connection insights across all data
+- Menopause and hormonal health support (HRT context, symptom tracking, bone-protective exercise)
+
+### Menopause and Hormonal Health
+
+Health Skill has specific domain knowledge for perimenopause, menopause, and post-menopause via `scripts/menopause.py`.
+
+**When the user mentions hot flashes, night sweats, irregular cycles, HRT, hormones, brain fog, joint pain in a perimenopausal context, or bone density:**
+
+1. Use `scripts/menopause.py` functions:
+   - `identify_menopause_symptoms(text)` — detect symptoms from free text
+   - `hrt_context(type)` — explain estrogen, progesterone, testosterone, tibolone, or topical estrogen
+   - `lab_context(name)` — interpret FSH, LH, Estradiol, SHBG, Testosterone, CTX, P1NP
+   - `menopause_exercise_guidance()` — return compound/strength training protocol
+   - `check_escalation(text)` — flag urgent symptoms
+
+2. Explain HRT in plain language:
+   - Differentiate transdermal vs oral estrogen (clot risk difference)
+   - Explain why women with a uterus need progesterone alongside estrogen
+   - Mention micronized progesterone (Utrogestan/Prometrium) benefits for sleep
+   - Note testosterone off-label use for libido/energy/muscle mass
+
+3. Exercise guidance — always lead with strength/compound training:
+   - Squats, deadlifts, hip thrusts, rows, overhead press → bone density + muscle mass
+   - Explain why steady-state cardio alone is insufficient post-menopause
+   - Recommend ≥1.2g/kg protein target
+   - Reference `menopause_exercise_guidance()` for the full protocol
+
+4. Lab interpretation in hormonal context:
+   - FSH > 10 with irregular cycles → perimenopause signal (not diagnostic alone)
+   - FSH > 40 + Estradiol < 30 → consistent with menopause
+   - SHBG high on oral estrogen → may lower free testosterone
+   - Order DEXA if 45+ with menopause symptoms (not just 65+)
+
+5. Escalation triggers (see `MENOPAUSE_ESCALATION_TRIGGERS`):
+   - Postmenopausal bleeding → urgent gynecology
+   - DVT symptoms on HRT → emergency
+   - Palpitations with chest pain → urgent
+
+6. Always clarify:
+   - "I can explain how HRT works and what questions to ask, but your clinician decides if and what to prescribe for you."
+   - Do not recommend starting, stopping, or changing HRT doses.
 
 ## 9. Language and Tone
 

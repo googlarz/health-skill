@@ -72,12 +72,16 @@ EXERCISE_BANK: dict[str, dict[str, Any]] = {
 
 
 GOAL_KEYWORDS = {
-    "posture":    ["posture", "upper back", "rear delts", "mobility"],
-    "strength":   ["strength", "legs", "back", "chest", "shoulder", "core"],
-    "endurance":  ["endurance"],
-    "weight loss":["weight loss", "endurance"],
-    "rehab":      ["rehab", "mobility", "core"],
-    "mobility":   ["mobility"],
+    "posture":         ["posture", "upper back", "rear delts", "mobility"],
+    "strength":        ["strength", "legs", "back", "chest", "shoulder", "core"],
+    "endurance":       ["endurance"],
+    "weight loss":     ["weight loss", "endurance"],
+    "rehab":           ["rehab", "mobility", "core"],
+    "mobility":        ["mobility"],
+    "menopause":       ["strength", "legs", "glutes", "posterior chain", "core"],
+    "bone density":    ["strength", "legs", "glutes", "posterior chain"],
+    "muscle mass":     ["strength", "legs", "back", "chest"],
+    "hormonal health": ["strength", "legs", "glutes", "core", "endurance"],
 }
 
 

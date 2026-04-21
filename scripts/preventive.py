@@ -44,6 +44,8 @@ RECOMMENDED_SCREENINGS: dict[str, dict[str, Any]] = {
     "lipid_panel": {"frequency_years": 5, "age_start": 20, "age_end": 99, "sex": "any"},
     "blood_pressure": {"frequency_years": 1, "age_start": 18, "age_end": 99, "sex": "any"},
     "bone_density": {"frequency_years": 5, "age_start": 65, "age_end": 99, "sex": "female"},
+    "bone_density_early": {"frequency_years": 2, "age_start": 45, "age_end": 64, "sex": "female", "condition": "menopause"},
+    "hormonal_panel": {"frequency_years": 1, "age_start": 40, "age_end": 60, "sex": "female", "condition": "perimenopause"},
     "lung_cancer_screening": {"frequency_years": 1, "age_start": 50, "age_end": 80, "sex": "any", "condition": "smoker"},
     "flu_shot": {"frequency_years": 1, "age_start": 6 / 12, "age_end": 99, "sex": "any"},
     "covid_booster": {"frequency_years": 1, "age_start": 5, "age_end": 99, "sex": "any"},

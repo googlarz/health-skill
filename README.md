@@ -1,12 +1,13 @@
 <p align="center">
   <h1 align="center">Health Skill</h1>
   <p align="center">
-    Local-first health workspace for Claude — organize records, track labs, prepare for visits, keep memory across sessions.
+    Local-first health workspace and longevity companion for Claude — organize records, track labs, log check-ins, plan training, prepare for visits, keep memory across sessions.
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
     <img src="https://img.shields.io/badge/tests-110%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
+    <img src="https://img.shields.io/badge/version-1.7-purple" alt="v1.7">
   </p>
 </p>
 
@@ -16,12 +17,15 @@
 
 Health Skill gives Claude a **durable workspace** so it can reason across your full health picture — labs connected to medications connected to follow-ups — instead of starting from scratch every conversation.
 
+It also works as a **daily longevity companion**: log how you feel, track your cycle, design training plans, monitor preventive care, and discover cross-domain patterns (sleep → pain → mood → labs).
+
 ## Contents
 
 - [Setup for Claude Cowork](#setup-for-claude-cowork)
 - [Setup for Claude Code](#setup-for-claude-code)
 - [What You Get](#what-you-get)
 - [Key Features](#key-features)
+- [Longevity Companion (v1.7)](#longevity-companion-v17)
 - [Who This Is For](#who-this-is-for)
 - [What It Is Not](#what-it-is-not)
 - [Documentation](#documentation)
@@ -110,10 +114,17 @@ Always read HEALTH_DOSSIER.md before answering health questions.
 | I want to... | Command |
 |---|---|
 | Set up a new person folder | `init-project --root . --name "Name"` |
+| Run onboarding | `onboard --root .` |
 | Process new documents | Drop into `inbox/`, then `process-inbox --root .` |
 | See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
 | Prepare for an appointment | `query-dashboard --root . --query "visit prep"` |
 | Ask a health question | `query-dashboard --root . --query "your question"` |
+| Log a daily check-in | `daily-checkin --root . --note "mood 8, slept 7h, energy good"` |
+| Log a workout | `workout-log --root . --type strength --duration 45 --notes "squats, deadlifts"` |
+| Generate a training plan | `workout-plan --root . --goals "build strength" --days 3` |
+| Log a screening | `screening-log --root . --name mammogram --date 2024-06-01` |
+| See overdue screenings | `preventive-check --root .` |
+| Discover cross-domain patterns | `connections --root .` |
 | Check extraction accuracy | `extraction-audit --root .` |
 
 See [docs/commands.md](docs/commands.md) for the full reference.
@@ -148,6 +159,59 @@ See [docs/files.md](docs/files.md) for the complete list.
 **Visual outputs** — Status chips (✅/⚠️), sparkline charts, trend arrows, and bold key numbers. Designed for scanning when tired or stressed.
 
 **Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
+
+## Longevity Companion (v1.7)
+
+Health Skill isn't just for paperwork. It's a daily companion for people who want to stay healthy over the long term.
+
+### Daily check-ins
+
+Log how you feel in plain language. Claude parses it and stores structured data:
+
+```
+"mood 7, slept 6 hours, knee hurts 3/10, energy low"
+```
+
+Trends surface over time — sleep vs energy, pain vs training load, mood across the cycle.
+
+### Cycle tracking (opt-in)
+
+Log periods, symptoms, and cycle events. Claude predicts your next period, tracks cycle length, and connects cycle phase to mood and energy data if you log check-ins. Fully opt-in — set `track_cycles: true` in your profile.
+
+### Training plans
+
+Tell Claude your goals and constraints. It generates a weekly plan:
+
+```
+"fix my posture, 3 days a week, 30 minutes, bad lower back"
+```
+
+Plans are injury-aware and include progression. Log workouts with `workout-log`. PRs tracked automatically.
+
+### Menopause & hormonal health
+
+Health Skill has specific knowledge of perimenopause and menopause:
+
+- **HRT context** — explains estrogen, progesterone, and testosterone therapy options; connects HRT to labs (lipids, bone markers); flags when symptoms warrant a conversation with a clinician
+- **Symptom tracking** — hot flashes, sleep disruption, mood, joint pain, brain fog tracked in daily check-ins and connected to cycle data
+- **Exercise guidance** — recommends compound/strength training for bone density preservation, explains why resistance training matters more post-menopause than cardio alone
+- **Lab interpretation** — FSH, LH, estradiol, SHBG in context of where you are in the transition
+
+### Preventive care
+
+Tracks screenings by age and sex: mammogram, colonoscopy, bone density (DEXA), cervical cancer, blood pressure, cholesterol, diabetes, skin checks, eye exams, and more. Tells you what's overdue and when things are due next.
+
+### Cross-domain connections
+
+The connections engine looks across all your data and surfaces patterns you wouldn't notice manually:
+
+- Sleep quality → next-day pain level
+- Training frequency → resting heart rate trend
+- Cycle phase → mood and energy check-ins
+- LDL trend → exercise frequency correlation
+- Weight → sleep quality over time
+
+---
 
 ## Who This Is For
 
