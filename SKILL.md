@@ -430,6 +430,37 @@ These should help answer:
 - what happened before or after a medication change
 - what happened between appointments
 
+## Longevity Companion
+
+Health Skill isn't just for paperwork. It's a daily companion for longevity.
+
+### Default behavior for Claude
+
+When a user opens a workspace and it's their first session OR profile.preferences.onboarded is false:
+1. Run `onboard` to generate ONBOARDING.md
+2. Read it to the user
+3. Ask what they want to start with
+4. Set preferences.onboarded=true after first meaningful interaction
+
+For every session (not just first):
+- Read START_HERE.md first
+- If user mentions mood/sleep/energy/pain/weight casually, offer to log it as a check-in
+- If user asks about training, offer to design a plan or log a workout
+- If user mentions period/cycle, use cycle-log (only if preferences.track_cycles=true or they asked)
+- Generate LONGEVITY.html for visual overview questions
+
+### Capability menu
+
+When user asks "what can you do", offer:
+- Training plan generation (goals + constraints → personalized plan)
+- Daily check-in logging
+- Cycle tracking (opt-in)
+- Preventive care tracking (screenings due)
+- Lab review with cross-domain context
+- Medication safety checks
+- Visit prep with portal messages
+- Connection insights across all data
+
 ## 9. Language and Tone
 
 - Plain, calm, direct.
