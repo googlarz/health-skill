@@ -76,6 +76,10 @@ try:
     from .checkins import command_daily_checkin
     from .cycles import command_cycle_log
     from .training import command_workout_log, command_workout_plan
+    from .onboarding import command_onboard
+    from .preventive import log_screening, write_preventive_care
+    from .connections import build_connections, render_connections_text
+    from .care_workspace import connections_path
     from .rendering import (
         build_timeline_events,
         create_backup_archive,
@@ -171,6 +175,10 @@ except ImportError:
     from checkins import command_daily_checkin
     from cycles import command_cycle_log
     from training import command_workout_log, command_workout_plan
+    from onboarding import command_onboard
+    from preventive import log_screening, write_preventive_care
+    from connections import build_connections, render_connections_text
+    from care_workspace import connections_path
     from rendering import (
         build_timeline_events,
         create_backup_archive,
@@ -1441,7 +1449,68 @@ def build_parser() -> argparse.ArgumentParser:
     workout_plan.add_argument("--injuries", default="")
     workout_plan.set_defaults(func=command_workout_plan)
 
+    # v1.7: Longevity companion commands
+    onboard_parser = subparsers.add_parser("onboard", help="Generate the welcome/onboarding message")
+    onboard_parser.add_argument("--root", required=True)
+    onboard_parser.add_argument("--person-id", default="")
+    onboard_parser.set_defaults(func=_command_onboard)
+
+    screening_parser = subparsers.add_parser("screening-log", help="Log a preventive screening")
+    screening_parser.add_argument("--root", required=True)
+    screening_parser.add_argument("--person-id", default="")
+    screening_parser.add_argument("--name", required=True)
+    screening_parser.add_argument("--date", required=True)
+    screening_parser.add_argument("--notes", default="")
+    screening_parser.set_defaults(func=_command_screening_log)
+
+    preventive_parser = subparsers.add_parser("preventive-check", help="Compute what screenings are overdue/due")
+    preventive_parser.add_argument("--root", required=True)
+    preventive_parser.add_argument("--person-id", default="")
+    preventive_parser.set_defaults(func=_command_preventive_check)
+
+    connections_parser = subparsers.add_parser("connections", help="Build cross-domain pattern insights")
+    connections_parser.add_argument("--root", required=True)
+    connections_parser.add_argument("--person-id", default="")
+    connections_parser.set_defaults(func=_command_connections)
+
     return parser
+
+
+def _command_onboard(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = command_onboard(root, args.person_id)
+    print(path)
+    return 0
+
+
+def _command_screening_log(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    log_screening(root, args.person_id, args.name, args.date, args.notes)
+    write_preventive_care(root, args.person_id)
+    print(f"Logged screening: {args.name} on {args.date}")
+    return 0
+
+
+def _command_preventive_check(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_preventive_care(root, args.person_id)
+    print(path)
+    return 0
+
+
+def _command_connections(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    insights = build_connections(root, args.person_id)
+    text = render_connections_text(profile, insights)
+    path = connections_path(root, args.person_id)
+    atomic_write_text(path, text)
+    print(path)
+    return 0
 
 
 def main() -> int:
