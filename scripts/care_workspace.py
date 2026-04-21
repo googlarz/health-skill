@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover
     Image = None
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Valid severity levels for structured allergy records (#14).
 ALLERGY_SEVERITY_LEVELS = ("mild", "moderate", "severe", "life-threatening")
@@ -65,6 +65,15 @@ DEFAULT_PROFILE = {
     "unresolved_questions": [],
     "documents": [],
     "encounters": [],
+    # v5: Longevity companion sections
+    "daily_checkins": [],  # mood, sleep, energy, pain, stress, notes
+    "cycles": [],  # period start/end/flow/symptoms (for menstruating users)
+    "workouts": [],  # training log entries
+    "workout_plans": [],  # structured training programs
+    "personal_records": [],  # PRs for lifts, times, distances
+    "screenings": [],  # preventive care (mammogram, colonoscopy, etc.)
+    "family_history": [],  # parent/sibling conditions for genetic risk
+    "goals": [],  # longevity / fitness / health goals with targets
     "preferences": {
         "summary_style": "concise",
         "weight_unit": "kg",
@@ -73,6 +82,8 @@ DEFAULT_PROFILE = {
         "communication_tone": "calm",
         "preferred_clinicians": [],
         "pdf_page_limit": 10,
+        "track_cycles": False,  # explicit opt-in for period tracking
+        "onboarded": False,  # has user seen the welcome flow
     },
     "consents": {
         "workspace_storage": "user_requested",
@@ -119,6 +130,15 @@ RECORD_KEYS = {
     "unresolved_questions": ("text",),
     "documents": ("title", "source_date"),
     "encounters": ("date", "kind", "title"),
+    # v5: Longevity companion
+    "daily_checkins": ("date",),
+    "cycles": ("start_date",),
+    "workouts": ("date", "type"),
+    "workout_plans": ("name",),
+    "personal_records": ("exercise", "category"),
+    "screenings": ("name",),
+    "family_history": ("relation", "condition"),
+    "goals": ("title",),
 }
 
 
@@ -252,6 +272,38 @@ def extraction_audit_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "EXTRACTION_AUDIT.json"
 
 
+def onboarding_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "ONBOARDING.md"
+
+
+def checkins_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "DAILY_CHECKINS.md"
+
+
+def cycles_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "CYCLES.md"
+
+
+def training_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "TRAINING.md"
+
+
+def workout_plan_path(root: Path, person_id: str, plan_name: str) -> Path:
+    return person_dir(root, person_id) / f"WORKOUT_PLAN_{slugify(plan_name).upper()}.md"
+
+
+def screenings_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "PREVENTIVE_CARE.md"
+
+
+def longevity_dashboard_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "LONGEVITY.html"
+
+
+def connections_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "CONNECTIONS.md"
+
+
 def extraction_accuracy_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "EXTRACTION_ACCURACY.md"
 
@@ -270,6 +322,26 @@ def metrics_db_path(root: Path, person_id: str) -> Path:
 
 def lock_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / ".health-skill.lock"
+
+
+def calculate_age_from_dob(dob: str) -> int:
+    """Calculate current age in years from a date-of-birth string (YYYY-MM-DD).
+
+    Returns 0 if dob is missing or unparseable.
+    """
+    if not dob:
+        return 0
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
+        try:
+            dt = datetime.strptime(dob.strip(), fmt).date()
+            break
+        except ValueError:
+            dt = None
+    if dt is None:
+        return 0
+    today = date.today()
+    years = today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
+    return max(years, 0)
 
 
 def normalize_list(section: str, items: list[Any]) -> list[dict[str, Any]]:

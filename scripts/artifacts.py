@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -680,5 +680,270 @@ def generate_query_dashboard_artifact(root: Path, person_id: str, query: str) ->
     snap = load_snapshot(root, person_id)
     html_text = build_query_dashboard_html(query, snap)
     output = exports_dir(root, person_id) / "QUERY_DASHBOARD.html"
+    atomic_write_text(output, html_text)
+    return output
+
+
+# ---------------------------------------------------------------------------
+# Longevity Dashboard (v1.7)
+# ---------------------------------------------------------------------------
+
+def _empty_card(title: str, cta: str) -> str:
+    return (
+        f'<div class="card"><div class="card-header"><span class="card-title">{_esc(title)}</span></div>'
+        f'<div style="color:var(--text-muted);font-size:0.9rem">No data yet. {_esc(cta)}</div></div>'
+    )
+
+
+def build_longevity_dashboard_html(root: Path, person_id: str) -> str:
+    """Build a comprehensive longevity dashboard HTML."""
+    # Local imports to avoid circular deps at module load
+    try:
+        from .care_workspace import calculate_age_from_dob, load_snapshot
+        from .preventive import compute_due_screenings
+        from .connections import build_connections
+    except ImportError:
+        from care_workspace import calculate_age_from_dob, load_snapshot  # type: ignore
+        from preventive import compute_due_screenings  # type: ignore
+        from connections import build_connections  # type: ignore
+
+    snap = load_snapshot(root, person_id)
+    p = snap.profile
+    charts: list[tuple[str, dict]] = []
+    sections: list[str] = []
+
+    name = p.get("name") or "Your"
+    age = calculate_age_from_dob(p.get("date_of_birth", ""))
+
+    sections.append(f'<h1>{_esc(name)} — Longevity Dashboard</h1>')
+    sections.append(f'<div class="subtitle">Generated {date.today().isoformat()}</div>')
+
+    stale = staleness_warning(p)
+    if stale:
+        sections.append(f'<div class="stale-banner">{_esc(stale)}</div>')
+
+    # --- Top status bar ---
+    weights = snap.weight_entries
+    vitals = snap.vital_entries
+    latest_weight = weights[-1] if weights else None
+    # crude BMI (needs height in prefs.height_cm)
+    bmi = None
+    height_cm = p.get("preferences", {}).get("height_cm")
+    if latest_weight and height_cm:
+        try:
+            h_m = float(height_cm) / 100.0
+            w_kg = float(latest_weight["value"])
+            if latest_weight.get("unit") == "lb":
+                w_kg = w_kg * 0.4536
+            if h_m > 0:
+                bmi = w_kg / (h_m * h_m)
+        except (TypeError, ValueError):
+            bmi = None
+
+    rhr_vals = [v["numeric_value"] for v in vitals if v.get("metric") == "heart_rate" and v.get("numeric_value") is not None]
+    rhr = round(rhr_vals[-1]) if rhr_vals else None
+
+    bp_vals = [v for v in vitals if v.get("metric") == "blood_pressure" and v.get("systolic") and v.get("diastolic")]
+    bp_cat = ""
+    if bp_vals:
+        last = bp_vals[-1]
+        s, d = int(last["systolic"]), int(last["diastolic"])
+        if s < 120 and d < 80:
+            bp_cat = "Normal"
+        elif s < 130 and d < 80:
+            bp_cat = "Elevated"
+        elif s < 140 or d < 90:
+            bp_cat = "Stage 1"
+        else:
+            bp_cat = "Stage 2"
+
+    last_lab_date = ""
+    for t in p.get("recent_tests", []):
+        d = t.get("date", "")
+        if d > last_lab_date:
+            last_lab_date = d
+
+    screenings = compute_due_screenings(p)
+    overdue_count = sum(1 for s in screenings if s["status"] == "overdue")
+
+    chips = []
+    chips.append(f'<span class="chip chip-ok">Age {age}</span>')
+    if bmi:
+        chips.append(f'<span class="chip chip-ok">BMI {bmi:.1f}</span>')
+    if rhr:
+        chips.append(f'<span class="chip chip-ok">RHR {rhr}</span>')
+    if bp_cat:
+        cls = "chip-ok" if bp_cat == "Normal" else "chip-warn" if bp_cat == "Elevated" else "chip-alert"
+        chips.append(f'<span class="chip {cls}">BP {_esc(bp_cat)}</span>')
+    if last_lab_date:
+        chips.append(f'<span class="chip chip-ok">Last lab {_esc(last_lab_date)}</span>')
+    chips.append(f'<span class="chip {"chip-alert" if overdue_count else "chip-ok"}">Overdue screenings: {overdue_count}</span>')
+    sections.append('<div class="status-bar">' + "".join(chips) + "</div>")
+
+    # --- Check-in trends (last 30 days) ---
+    sections.append("<h2>Daily Check-in Trends (last 30 days)</h2>")
+    checkins = p.get("daily_checkins", [])
+    cutoff_dt = date.today() - timedelta(days=30)
+    ci_recent = []
+    for c in checkins:
+        try:
+            d = datetime.strptime(str(c.get("date", ""))[:10], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if d >= cutoff_dt:
+            ci_recent.append((d, c))
+    ci_recent.sort(key=lambda x: x[0])
+    if ci_recent:
+        labels = [d.isoformat()[5:] for d, _ in ci_recent]
+        def _num(c, key):
+            v = c.get(key)
+            try:
+                return float(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+        mood = [_num(c, "mood") for _, c in ci_recent]
+        sleep = [_num(c, "sleep") or _num(c, "sleep_hours") for _, c in ci_recent]
+        energy = [_num(c, "energy") for _, c in ci_recent]
+        pain = [_num(c, "pain") for _, c in ci_recent]
+        sections.append('<div class="card"><div class="chart-container">')
+        sections.append(_chart_line(charts, labels=labels, datasets=[
+            {"label": "Mood", "data": mood, "borderColor": "#38bdf8", "fill": False},
+            {"label": "Sleep (h)", "data": sleep, "borderColor": "#a78bfa", "fill": False},
+            {"label": "Energy", "data": energy, "borderColor": "#4ade80", "fill": False},
+            {"label": "Pain", "data": pain, "borderColor": "#f87171", "fill": False},
+        ]))
+        sections.append("</div></div>")
+    else:
+        sections.append(_empty_card("Check-ins", "Try: 'slept 7h, mood 8, energy 7'"))
+
+    # --- Training volume last 12 weeks ---
+    sections.append("<h2>Training Volume (weekly, last 12 weeks)</h2>")
+    workouts = p.get("workouts", [])
+    weeks_ago_12 = date.today() - timedelta(weeks=12)
+    wk_buckets: dict[str, int] = {}
+    for w in workouts:
+        try:
+            d = datetime.strptime(str(w.get("date", ""))[:10], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if d < weeks_ago_12:
+            continue
+        # ISO week label
+        iso = d.isocalendar()
+        key = f"{iso[0]}-W{iso[1]:02d}"
+        mins = 0
+        try:
+            mins = int(float(w.get("duration_minutes") or w.get("duration") or 0))
+        except (TypeError, ValueError):
+            mins = 0
+        if not mins:
+            mins = 30  # default estimate
+        wk_buckets[key] = wk_buckets.get(key, 0) + mins
+    if wk_buckets:
+        ordered = sorted(wk_buckets.items())
+        sections.append('<div class="card"><div class="chart-container">')
+        sections.append(_chart_line(charts, labels=[k for k, _ in ordered], datasets=[{
+            "label": "Minutes/week", "data": [v for _, v in ordered],
+            "borderColor": "#4ade80", "backgroundColor": "rgba(74,222,128,0.15)",
+        }]))
+        sections.append("</div></div>")
+    else:
+        sections.append(_empty_card("Training", "Log a workout: 'ran 5k in 28 min'"))
+
+    # --- Cycle overview ---
+    sections.append("<h2>Cycle Overview</h2>")
+    cycles = p.get("cycles", [])
+    if cycles:
+        last6 = cycles[-6:]
+        lengths = []
+        prev = None
+        for c in last6:
+            try:
+                s = datetime.strptime(str(c.get("start_date", ""))[:10], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if prev:
+                lengths.append((s - prev).days)
+            prev = s
+        avg = f"{statistics_mean(lengths):.1f}" if lengths else "-"
+        rows = "".join(
+            f"<li><strong>{_esc(c.get('start_date',''))}</strong> — flow: {_esc(c.get('flow',''))} — {_esc(', '.join(c.get('symptoms', []) if isinstance(c.get('symptoms'), list) else [str(c.get('symptoms',''))])) if c.get('symptoms') else ''}</li>"
+            for c in last6
+        )
+        sections.append(f'<div class="card"><div>Avg cycle length: {avg} days</div><ul>{rows}</ul></div>')
+    else:
+        sections.append(_empty_card("Cycle tracking", "Opt in with preferences.track_cycles=true, then log a period."))
+
+    # --- Preventive care ---
+    sections.append("<h2>Preventive Care</h2>")
+    if screenings:
+        icon = {"overdue": "⚠", "due_soon": "!", "up_to_date": "✓", "not_yet": "·", "not_applicable": "—"}
+        dot = {"overdue": "dot-red", "due_soon": "dot-yellow", "up_to_date": "dot-green", "not_yet": "dot-gray", "not_applicable": "dot-gray"}
+        items = sorted(screenings, key=lambda r: ["overdue", "due_soon", "up_to_date", "not_yet", "not_applicable"].index(r["status"]))
+        sections.append('<div class="card"><ul>')
+        for r in items:
+            pretty = r["name"].replace("_", " ").title()
+            sections.append(
+                f'<li><span class="dot {dot[r["status"]]}"></span>{icon[r["status"]]} <strong>{_esc(pretty)}</strong>'
+                f' <span style="color:var(--text-muted);margin-left:auto;font-size:0.85rem">{_esc(r.get("reason",""))}</span></li>'
+            )
+        sections.append("</ul></div>")
+    else:
+        sections.append(_empty_card("Preventive care", "Add date of birth and sex to your profile."))
+
+    # --- Cross-domain insights ---
+    sections.append("<h2>Cross-Domain Insights</h2>")
+    try:
+        insights = build_connections(root, person_id)
+    except Exception:
+        insights = []
+    if insights:
+        sections.append('<div class="card"><ul>')
+        for i in insights:
+            conf_cls = {"high": "tag-active", "medium": "tag-pending", "low": "tag-alert"}.get(i["confidence"], "tag-pending")
+            sections.append(
+                f'<li><strong>{_esc(i["title"])}</strong> <span class="tag {conf_cls}">{_esc(i["confidence"])}</span><br>'
+                f'<span style="color:var(--text-muted);font-size:0.9rem">{_esc(i["detail"])}</span></li>'
+            )
+        sections.append("</ul></div>")
+    else:
+        sections.append(_empty_card("Insights", "Log 2+ weeks of check-ins and workouts to surface patterns."))
+
+    # --- Labs vs goals ---
+    sections.append("<h2>Key Labs</h2>")
+    key_labs = [t for t in p.get("recent_tests", []) if str(t.get("name", "")).upper() in {"LDL", "HDL", "A1C", "TSH", "TOTAL CHOLESTEROL"}]
+    if key_labs:
+        sections.append('<div class="card"><ul>')
+        for t in key_labs[-8:]:
+            flag = t.get("flag", "")
+            sections.append(
+                f'<li><span class="dot {_dot_class(flag)}"></span>'
+                f'<strong>{_esc(t.get("name"))}</strong> {_esc(t.get("value"))} {_esc(t.get("unit",""))} '
+                f'<span class="{_flag_class(flag)}">{_esc(flag)}</span>'
+                f'<span style="color:var(--text-muted);margin-left:auto;font-size:0.85rem">{_esc(t.get("date",""))}</span></li>'
+            )
+        sections.append("</ul></div>")
+    else:
+        sections.append(_empty_card("Labs", "Drop a lab report into inbox/ to extract."))
+
+    sections.append(f'<footer>Generated {date.today().isoformat()} · Health Skill · Not medical advice</footer>')
+    return _wrap_html(f"{name} — Longevity Dashboard", "\n".join(sections), charts=charts)
+
+
+def statistics_mean(values: list[float]) -> float:
+    """Tiny local mean to avoid top-level statistics import change."""
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
+def generate_longevity_dashboard_artifact(root: Path, person_id: str) -> Path:
+    """Generate LONGEVITY.html — the comprehensive longevity dashboard."""
+    try:
+        from .care_workspace import longevity_dashboard_path
+    except ImportError:
+        from care_workspace import longevity_dashboard_path  # type: ignore
+    html_text = build_longevity_dashboard_html(root, person_id)
+    output = longevity_dashboard_path(root, person_id)
     atomic_write_text(output, html_text)
     return output

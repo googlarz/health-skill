@@ -73,6 +73,9 @@ try:
         ingest_document,
         process_inbox,
     )
+    from .checkins import command_daily_checkin
+    from .cycles import command_cycle_log
+    from .training import command_workout_log, command_workout_plan
     from .rendering import (
         build_timeline_events,
         create_backup_archive,
@@ -165,6 +168,9 @@ except ImportError:
         ingest_document,
         process_inbox,
     )
+    from checkins import command_daily_checkin
+    from cycles import command_cycle_log
+    from training import command_workout_log, command_workout_plan
     from rendering import (
         build_timeline_events,
         create_backup_archive,
@@ -1405,6 +1411,35 @@ def build_parser() -> argparse.ArgumentParser:
     extraction_audit.add_argument("--person-id", default="")
     extraction_audit.add_argument("--json", action="store_true", help="Output raw JSON stats instead of markdown")
     extraction_audit.set_defaults(func=command_extraction_audit)
+
+    daily_checkin = subparsers.add_parser("daily-checkin")
+    daily_checkin.add_argument("--root", required=True)
+    daily_checkin.add_argument("--person-id", default="")
+    daily_checkin.add_argument("--text", required=True)
+    daily_checkin.add_argument("--date", default="")
+    daily_checkin.set_defaults(func=command_daily_checkin)
+
+    cycle_log = subparsers.add_parser("cycle-log")
+    cycle_log.add_argument("--root", required=True)
+    cycle_log.add_argument("--person-id", default="")
+    cycle_log.add_argument("--text", required=True)
+    cycle_log.add_argument("--date", default="")
+    cycle_log.set_defaults(func=command_cycle_log)
+
+    workout_log = subparsers.add_parser("workout-log")
+    workout_log.add_argument("--root", required=True)
+    workout_log.add_argument("--person-id", default="")
+    workout_log.add_argument("--text", required=True)
+    workout_log.set_defaults(func=command_workout_log)
+
+    workout_plan = subparsers.add_parser("workout-plan")
+    workout_plan.add_argument("--root", required=True)
+    workout_plan.add_argument("--person-id", default="")
+    workout_plan.add_argument("--goal", required=True)
+    workout_plan.add_argument("--available", required=True)
+    workout_plan.add_argument("--equipment", default="")
+    workout_plan.add_argument("--injuries", default="")
+    workout_plan.set_defaults(func=command_workout_plan)
 
     return parser
 
