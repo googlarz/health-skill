@@ -114,13 +114,11 @@ Tell me what you've had done and I'll track what's due next:
 
 ---
 
-## Let's start — pick ONE:
+---
 
-1. **📸 Send a photo** — posture, skin, medication bottle, food, labs on paper
-2. **📋 Drop a document** — put a lab PDF or visit note in `inbox/` and say "process inbox"
-3. **🎯 Share a goal** — training, weight, energy, sleep, hormones
-4. **📝 Check in** — how are you feeling today? weight? sleep last night?
-5. **💬 Ask anything** — what's on your mind health-wise?
+**What would you like to share or start with today?**
+
+You can send a photo, drop a document in `inbox/`, tell me how you're feeling, share a goal, or just ask a question — whatever feels most useful right now.
 """
 
 
