@@ -118,7 +118,7 @@ Tell me what you've had done and I'll track what's due next:
 
 **What would you like to share or start with today?**
 
-You can send a photo, drop a document in `inbox/`, tell me how you're feeling, share a goal, or just ask a question — whatever feels most useful right now.
+You can drop a photo or document (like lab results) right here in the chat, tell me how you're feeling, share a goal, or just ask a question — whatever feels most useful right now.
 """
 
 
