@@ -191,8 +191,8 @@ def _detect_training_gap(profile: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _detect_rhr_trend(vitals: list[dict[str, Any]]) -> dict[str, Any] | None:
-    hrs = [(v, _parse_date(v.get("entry_date", ""))) for v in vitals if v.get("metric") == "heart_rate"]
-    hrs = [(float(v["numeric_value"]), d) for v, d in hrs if d and v.get("numeric_value") is not None]
+    hrs_raw = [(v, _parse_date(v.get("entry_date", ""))) for v in vitals if v.get("metric") == "heart_rate"]
+    hrs: list[tuple[float, date]] = [(float(v["numeric_value"]), d) for v, d in hrs_raw if d is not None and v.get("numeric_value") is not None]
     if len(hrs) < MIN_DATA_POINTS:
         return None
     hrs.sort(key=lambda x: x[1])
@@ -227,8 +227,8 @@ def _detect_rhr_trend(vitals: list[dict[str, Any]]) -> dict[str, Any] | None:
 def _detect_weight_sleep(profile: dict[str, Any], weights: list[dict[str, Any]]) -> dict[str, Any] | None:
     if len(weights) < MIN_DATA_POINTS:
         return None
-    parsed = [(float(w["value"]), _parse_date(w.get("entry_date", ""))) for w in weights if w.get("value") is not None]
-    parsed = [(v, d) for v, d in parsed if d]
+    parsed_raw = [(float(w["value"]), _parse_date(w.get("entry_date", ""))) for w in weights if w.get("value") is not None]
+    parsed: list[tuple[float, date]] = [(v, d) for v, d in parsed_raw if d is not None]
     if len(parsed) < MIN_DATA_POINTS:
         return None
     parsed.sort(key=lambda x: x[1])
