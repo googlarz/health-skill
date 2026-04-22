@@ -27,51 +27,100 @@ except ImportError:
 
 NEW_USER_TEMPLATE = """# Welcome to your Health workspace, {name}
 
-I'm here to be your longevity companion — not just a records tool. I connect your labs, training, mood, sleep, nutrition, and everything else so we can spot patterns and help you live better, longer.
+I'm your longevity companion — not just a records organizer. I connect your labs, training, mood, sleep, weight, hormones, and everything else to spot patterns and help you feel and perform better over time.
 
-## What I can help with
+Everything stays on your device. Nothing is sent anywhere.
 
-### Medical documents
-Lab reports (MyChart/Quest/LabCorp), after-visit summaries, prescriptions, imaging reports
-- Drop into `inbox/` — I'll extract and organize
+---
 
-### Photos
-Medication bottles, skin changes, wounds, food, progress photos
-- Drop into `inbox/` — I'll describe or OCR
+## What you can send me
 
-### Training & fitness
-- Design training plans for your goals (posture, strength, endurance, rehab)
-- Log workouts naturally ("5k in 28 min", "bench 80kg 5x5")
-- Track PRs and progression
-- Build programs around your schedule and equipment
-- Tell me: "I want to fix my posture, 3x30min/week with dumbbells"
+### 📋 Medical documents
+Drop any of these into `inbox/` and I'll extract the important data automatically:
+- **Lab reports** — Quest, LabCorp, MyChart PDFs. I'll pull out every value, flag abnormals, and track trends over time. *Example: "LDL went from 188 → 162 → 141 — here's what that trend means"*
+- **After-visit summaries** — I'll extract diagnoses, medications, and follow-up instructions
+- **Discharge notes** — I'll build a checklist of what to do next
+- **Prescription lists** — I'll check for allergy conflicts and flag anything to ask your pharmacist
+- **Imaging reports** — I'll translate radiology language into plain English
 
-### Daily check-ins
-Mood, weight, sleep, energy, pain, stress — just tell me naturally
-- "slept 6 hours, mood 7, back hurts 3/10"
+### 📸 Photos you can send me
+- **Posture photo** (side or back view) — I'll analyze your alignment, spot imbalances, and suggest corrective exercises
+- **Skin changes or wounds** — I'll describe what I see and tell you when to see a doctor
+- **Medication bottle** — I'll read the label, check interactions, and explain what it's for
+- **Food photo** — rough macro estimate, protein check if you're tracking intake
+- **Progress photo** — body composition notes over time
 
-### Cycle tracking (private, local-only)
-Periods, symptoms, ovulation, patterns
-- "period started today, cramps, heavy flow"
+### 🏋️ Training & fitness
+Tell me your goals and I'll build a personalised plan:
+- *"Fix my posture, 3 days a week, 30 min, I have dumbbells"*
+- *"Build strength for menopause, compound lifts, bad left knee"*
+- *"Couch to 5k in 8 weeks"*
+- *"Upper/lower split, 4 days, home gym"*
 
-### Preventive care
-I'll track what screenings you're due for based on your age and history
-- "last mammogram was 2023-06"
+Log workouts naturally:
+- *"45 min strength — squats 60kg 4x8, RDL 50kg 3x10, rows"*
+- *"Easy 5k run, 28:30, felt good"*
+- *"PT session, 30 min — bird dogs, dead bugs, wall angels"*
 
-### Questions I can answer
-- "What do my labs mean in context of my training?"
-- "Should I worry about this medication side effect?"
-- "How's my period been this year?"
-- "What's my sleep doing to my recovery?"
-- "What am I overdue for?"
+I track PRs, progression, and training load automatically.
+
+### ⚖️ Daily weight
+Just tell me:
+- *"76.2 kg this morning"*
+- *"weight 168 lbs"*
+
+I'll track the trend, smooth out daily noise, and show you the actual direction — not just yesterday vs today.
+
+### 😴 Daily check-in (mood, sleep, energy, pain)
+One line is enough:
+- *"slept 6 hours, mood 7/10, energy low, knee 3/10"*
+- *"great day — 8h sleep, mood 9, no pain"*
+- *"terrible night, hot flashes woke me twice, exhausted"*
+
+Over time I connect these: sleep → next-day energy, cycle phase → mood, training load → pain.
+
+### 🩸 Cycle tracking (opt-in, private)
+- *"period started today, cramps, flow heavy"*
+- *"spotting, day 14, slight cramping"*
+- *"period ended, 5 days total"*
+
+I predict your next period, track cycle length, and connect cycle phase to your mood and energy check-ins if you log both.
+
+### 💊 Hormones & menopause
+Tell me where you are and what you're experiencing:
+- *"I'm 48, cycles getting irregular, hot flashes at night, brain fog"*
+- *"Started estrogen patch 3 months ago, want to understand my labs"*
+- *"What exercises are best for bone density post-menopause?"*
+
+I'll explain FSH/LH/Estradiol/SHBG in plain language, explain how different HRT types work, and tell you what questions to bring to your clinician.
+
+### 🩺 Preventive care
+Tell me what you've had done and I'll track what's due next:
+- *"Last mammogram June 2023"*
+- *"Colonoscopy done 2020"*
+- *"Never had a DEXA scan"*
+
+---
+
+## Questions I can answer right now
+
+- *"What do my cholesterol labs mean and is the trend good?"*
+- *"I'm starting metformin — what should I know?"*
+- *"My LDL is 165 — does my training frequency affect that?"*
+- *"Should I be worried about this symptom?"*
+- *"Help me prepare for my appointment on Thursday"*
+- *"What's overdue for me this year?"*
+- *"Write a message I can send my doctor through the portal"*
+
+---
 
 ## Let's start — pick ONE:
 
-1. **A concern** — what's on your mind health-wise?
-2. **A goal** — training goal, weight goal, longevity goal?
-3. **A document** — drop a lab report or visit note in `inbox/`
-4. **A check-in** — how are you feeling today?
-5. **Your basics** — medications, conditions, allergies, recent screenings
+1. **📸 Send a photo** — posture, skin, medication bottle, food, labs on paper
+2. **📋 Drop a document** — put a lab PDF or visit note in `inbox/` and say "process inbox"
+3. **🎯 Share a goal** — training, weight, energy, sleep, hormones
+4. **📝 Check in** — how are you feeling today? weight? sleep last night?
+5. **💬 Ask anything** — what's on your mind health-wise?
 """
 
 
