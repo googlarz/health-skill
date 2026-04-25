@@ -90,6 +90,7 @@ try:
     from .nutrition import log_meal, write_nutrition
     from .decisions import write_hrt_decision, write_statin_decision, write_screening_decision
     from .wearable_sync import sync_wearable_inbox
+    from .wearable_watch import install_launchd_watcher, uninstall_launchd_watcher, watcher_status
     from .household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -205,7 +206,8 @@ except ImportError:
     from lab_actions import write_lab_actions
     from nutrition import log_meal, write_nutrition
     from decisions import write_hrt_decision, write_statin_decision, write_screening_decision
-    from wearable_sync import sync_wearable_inbox
+    from wearable_sync import sync_wearable_inbox  # type: ignore
+    from wearable_watch import install_launchd_watcher, uninstall_launchd_watcher, watcher_status  # type: ignore
     from household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -1606,6 +1608,18 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument("--person-id", default="")
     sync_parser.set_defaults(func=_command_sync_wearable)
 
+    watch_parser = subparsers.add_parser(
+        "setup-watch",
+        help="Install a macOS launchd job to auto-run sync-wearable hourly",
+    )
+    watch_parser.add_argument("--root", required=True)
+    watch_parser.add_argument("--person-id", default="")
+    watch_parser.add_argument("--interval", type=int, default=3600,
+                              help="Check interval in seconds (default: 3600 = 1 hour)")
+    watch_parser.add_argument("--uninstall", action="store_true", help="Remove the watcher")
+    watch_parser.add_argument("--status", action="store_true", help="Show watcher status")
+    watch_parser.set_defaults(func=_command_setup_watch)
+
     hh_member_parser = subparsers.add_parser("household-add-member", help="Add a person to the household graph")
     hh_member_parser.add_argument("--root", required=True)
     hh_member_parser.add_argument("--id", required=True, dest="member_id")
@@ -1817,6 +1831,30 @@ def _command_sync_wearable(args: argparse.Namespace) -> int:
         print("Errors:")
         for e in summary["errors"]:
             print(f"  - {e['file']}: {e['error']}")
+    return 0
+
+
+def _command_setup_watch(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    person_id = args.person_id or ""
+    if args.uninstall:
+        removed = uninstall_launchd_watcher(person_id)
+        print("Watcher uninstalled." if removed else "No watcher found for this person.")
+        return 0
+    if args.status:
+        info = watcher_status(person_id)
+        print(f"Installed : {info['installed']}")
+        print(f"Running   : {info['running']}")
+        print(f"Plist     : {info['plist']}")
+        return 0
+    plist = install_launchd_watcher(root, person_id, interval_seconds=args.interval)
+    print(f"✅ Watcher installed: {plist}")
+    print(f"   Runs every {args.interval // 60} minutes.")
+    print(f"   Logs: {root.resolve() / 'logs' / 'wearable-sync.log'}")
+    print()
+    print("Drop .json files from Health Auto Export (or .xml / .csv) into:")
+    print(f"   {root.resolve()}/{person_id or 'person'}/inbox/wearable/")
+    print("They will be processed automatically.")
     return 0
 
 

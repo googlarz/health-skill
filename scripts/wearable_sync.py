@@ -39,7 +39,7 @@ def sync_wearable_inbox(root: Path, person_id: str) -> dict[str, Any]:
     for f in sorted(src.iterdir()):
         if not f.is_file():
             continue
-        if f.suffix.lower() not in (".xml", ".csv"):
+        if f.suffix.lower() not in (".xml", ".csv", ".json"):
             summary["files_skipped"] += 1
             continue
         try:

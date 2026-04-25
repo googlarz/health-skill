@@ -1,16 +1,87 @@
-# Wearable Sync — iOS Shortcut Recipe
+# Wearable Sync — Apple Health Integration
 
-Goal: Apple Watch / iPhone health data flows into the workspace daily without typing.
+Goal: Apple Watch / iPhone health data flows into the workspace automatically without any manual step.
 
 ## Path: file-based, local-only
 
-The skill watches `<person-folder>/inbox/wearable/` for `.xml` and `.csv` files. When you run `sync-wearable`, every file is imported, moved to `Archive/wearable/`, and the workspace is updated.
+The skill watches `<person-folder>/inbox/wearable/` for `.xml`, `.csv`, and `.json` files. When you run `sync-wearable`, every file is imported, moved to `Archive/wearable/`, and the workspace is updated.
 
-The pieces below let you make that drop happen automatically from your phone — without any cloud service.
+The options below let you make that happen automatically from your phone — no cloud service required.
 
 ---
 
-## Option A — Daily CSV via iOS Shortcut (recommended)
+## Option A — Health Auto Export + iCloud Drive (recommended, fully automatic)
+
+This is the easiest path. The [Health Auto Export](https://www.healthexportapp.com/) app ($3.99) exports your Apple Watch and iPhone metrics to a JSON file on a schedule. You set it once; data arrives every hour.
+
+### Setup
+
+#### 1. Install Health Auto Export
+
+Download from the App Store: **Health Auto Export - JSON+CSV**.
+
+#### 2. Configure the export
+
+In the app:
+- Tap **Exports** → **+** → name it "Health Skill"
+- **Format**: JSON
+- **Metrics to include**: Step Count, Resting Heart Rate, Heart Rate Variability (SDNN), VO2 Max, Body Mass, Oxygen Saturation, Sleep Analysis, Blood Pressure
+- **Export destination**: iCloud Drive → `Health Auto Export/` folder (or any folder)
+- **Schedule**: Every hour (or Every day — hourly gives you fresher data)
+- Toggle **Auto Export** ON
+
+#### 3. Link the folder to your workspace inbox
+
+On your Mac, open Terminal and create a symlink so the JSON files land directly in your workspace inbox:
+
+```bash
+# Replace ~/Health/me with your actual person folder
+mkdir -p ~/Health/me/inbox/wearable
+ln -sf ~/Library/Mobile\ Documents/com~apple~CloudDocs/Health\ Auto\ Export \
+       ~/Health/me/inbox/wearable/health-auto-export
+```
+
+Or, in the Health Auto Export app, set the destination folder directly to a folder inside iCloud Drive that you've already configured your Mac to sync.
+
+#### 4. Install the background watcher
+
+This installs a macOS background job (launchd) that runs `sync-wearable` every hour:
+
+```bash
+python3 ~/.claude/skills/health-skill/scripts/care_workspace.py setup-watch \
+  --root ~/Health/me \
+  --person-id me
+```
+
+That's it. From this point:
+- Health Auto Export writes a JSON to iCloud Drive every hour
+- iCloud syncs it to your Mac
+- The background job picks it up and imports it into your workspace
+
+#### Check watcher status
+
+```bash
+python3 ~/.claude/skills/health-skill/scripts/care_workspace.py setup-watch \
+  --root ~/Health/me --person-id me --status
+```
+
+#### Uninstall
+
+```bash
+python3 ~/.claude/skills/health-skill/scripts/care_workspace.py setup-watch \
+  --root ~/Health/me --person-id me --uninstall
+```
+
+#### Logs
+
+```
+~/Health/me/logs/wearable-sync.log
+~/Health/me/logs/wearable-sync-error.log
+```
+
+---
+
+## Option B — Daily CSV via iOS Shortcut
 
 This Shortcut runs once a day, exports yesterday's HealthKit metrics to a CSV in the right folder, and the watcher picks it up next time you open the workspace.
 
@@ -83,7 +154,7 @@ Or wire it into a launchd job that runs every morning.
 
 ---
 
-## Option B — Apple Health full export (manual, weekly)
+## Option C — Apple Health full export (manual, weekly)
 
 For a full sweep including sleep stages, BP, VO2 trend:
 
@@ -96,7 +167,7 @@ For a full sweep including sleep stages, BP, VO2 trend:
 
 ---
 
-## Option C — Oura, Whoop, Garmin
+## Option D — Oura, Whoop, Garmin
 
 Each platform has CSV/JSON export:
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from scripts.care_workspace import ensure_person, load_profile, save_profile
 from scripts.commands import build_parser
+from scripts.wearable_import import import_wearable_file
 from scripts.decisions import (hrt_decision, screening_intensity_decision,
                                statin_decision)
 from scripts.forecasting import forecast_marker, forecast_labs
@@ -164,13 +165,81 @@ class HouseholdTests(unittest.TestCase):
         self.assertEqual(breast[0]["relation"], "mother")
 
 
+class HealthAutoExportTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        ensure_person(self.root, "me", "Test User", "1985-01-01", "female")
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def _write_json(self, data: dict) -> Path:
+        import json
+        p = self.root / "export.json"
+        p.write_text(json.dumps(data))
+        return p
+
+    def test_steps_imported(self):
+        json_file = self._write_json({"data": {"metrics": [
+            {"name": "step_count", "units": "count", "data": [
+                {"date": "2024-03-01 00:00:00 +0100", "qty": 9200.0},
+            ]},
+        ]}})
+        counts = import_wearable_file(self.root, "me", json_file)
+        self.assertEqual(counts.get("steps"), 1)
+
+    def test_weight_imported(self):
+        json_file = self._write_json({"data": {"metrics": [
+            {"name": "body_mass", "units": "kg", "data": [
+                {"date": "2024-03-01 00:00:00 +0100", "qty": 68.5},
+            ]},
+        ]}})
+        counts = import_wearable_file(self.root, "me", json_file)
+        self.assertEqual(counts.get("weight"), 1)
+
+    def test_sleep_imported_as_checkin(self):
+        json_file = self._write_json({"data": {"metrics": [
+            {"name": "sleep_analysis", "units": "hr", "data": [
+                {"date": "2024-03-01 00:00:00 +0100", "asleep": 7.2, "inBed": 8.0},
+            ]},
+        ]}})
+        counts = import_wearable_file(self.root, "me", json_file)
+        self.assertEqual(counts.get("sleep"), 1)
+        profile = load_profile(self.root, "me")
+        checkins = profile.get("daily_checkins", [])
+        self.assertTrue(any(c.get("sleep_hours") == 7.2 for c in checkins))
+
+    def test_resting_hr_imported(self):
+        json_file = self._write_json({"data": {"metrics": [
+            {"name": "resting_heart_rate", "units": "count/min", "data": [
+                {"date": "2024-03-01 00:00:00 +0100", "qty": 57.0},
+            ]},
+        ]}})
+        counts = import_wearable_file(self.root, "me", json_file)
+        self.assertEqual(counts.get("heart_rate"), 1)
+
+    def test_unknown_metric_skipped(self):
+        json_file = self._write_json({"data": {"metrics": [
+            {"name": "unknown_metric_xyz", "units": "", "data": [
+                {"date": "2024-03-01 00:00:00 +0100", "qty": 42.0},
+            ]},
+        ]}})
+        counts = import_wearable_file(self.root, "me", json_file)
+        self.assertEqual(counts, {})
+
+    def test_empty_metrics_no_crash(self):
+        json_file = self._write_json({"data": {"metrics": []}})
+        counts = import_wearable_file(self.root, "me", json_file)
+        self.assertEqual(counts, {})
+
+
 class CLIWiringTests(unittest.TestCase):
     def test_v19_v20_subcommands_present(self):
         parser = build_parser()
         choices = parser._subparsers._group_actions[0].choices  # type: ignore[attr-defined]
         for cmd in [
             "forecast", "lab-actions", "log-meal", "nutrition",
-            "decide", "sync-wearable",
+            "decide", "sync-wearable", "setup-watch",
             "household-add-member", "household-add-relationship",
             "household-cascade", "household-dashboard",
         ]:

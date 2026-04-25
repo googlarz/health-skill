@@ -194,6 +194,129 @@ def _import_csv(root: Path, person_id: str, csv_path: Path) -> dict[str, int]:
     return counts
 
 
+# Health Auto Export metric names → internal mapping
+# https://www.healthexportapp.com/
+_HAE_METRIC_MAP = {
+    "step_count":                     ("vital", "steps", ""),
+    "resting_heart_rate":             ("vital", "heart_rate", "bpm"),
+    "heart_rate":                     ("vital", "heart_rate", "bpm"),
+    "heart_rate_variability_sdnn":    ("vital", "hrv", "ms"),
+    "vo2_max":                        ("vital", "vo2_max", "ml/kg/min"),
+    "oxygen_saturation":              ("vital", "spo2", "%"),
+    "body_mass":                      ("weight", "weight", "kg"),
+    "blood_pressure_systolic":        ("bp", "systolic", "mmHg"),
+    "blood_pressure_diastolic":       ("bp", "diastolic", "mmHg"),
+    "sleep_analysis":                 ("sleep", "sleep_hours", "h"),
+}
+
+
+def _import_health_auto_export_json(root: Path, person_id: str, json_path: Path) -> dict[str, int]:
+    """Parse a Health Auto Export JSON file.
+
+    The app exports data in this structure:
+      {"data": {"metrics": [{"name": "step_count", "units": "count",
+                              "data": [{"date": "2024-01-15 ...", "qty": 8421}]}, ...]}}
+
+    Sleep uses inBed/asleep keys instead of qty.
+    Blood pressure has systolicValue/diastolicValue keys.
+    """
+    import json as _json
+
+    try:
+        raw = _json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError) as e:
+        raise ValueError(f"Cannot parse {json_path.name}: {e}") from e
+
+    metrics = raw.get("data", {}).get("metrics", [])
+    counts: dict[str, int] = {}
+    daily_vitals: dict[tuple[str, date], list[float]] = {}
+    bp_pairs: dict[date, dict[str, float]] = {}
+    sleep_per_day: dict[date, float] = {}
+
+    for metric_block in metrics:
+        name = metric_block.get("name", "")
+        mapping = _HAE_METRIC_MAP.get(name)
+        if not mapping:
+            continue
+        kind, metric, unit = mapping
+        units_override = metric_block.get("units", unit)
+
+        for entry in metric_block.get("data", []):
+            d = _parse_apple_date(entry.get("date", ""))
+            if not d:
+                continue
+
+            if kind == "sleep":
+                hours = float(entry.get("asleep") or entry.get("inBed") or 0)
+                if hours > 0:
+                    sleep_per_day[d] = max(sleep_per_day.get(d, 0.0), hours)
+                continue
+
+            if kind == "weight":
+                raw_val = entry.get("qty")
+                if raw_val is None:
+                    continue
+                kg_val = float(raw_val)
+                if units_override.lower().startswith("lb"):
+                    kg_val *= 0.453592
+                record_weight(root, person_id, d.isoformat(), kg_val, "kg", "Health Auto Export")
+                counts["weight"] = counts.get("weight", 0) + 1
+                continue
+
+            if kind == "bp":
+                sys_val = entry.get("systolicValue") or entry.get("qty")
+                dia_val = entry.get("diastolicValue")
+                if metric == "systolic" and sys_val:
+                    bp_pairs.setdefault(d, {})["systolic"] = float(sys_val)
+                elif metric == "diastolic" and dia_val:
+                    bp_pairs.setdefault(d, {})["diastolic"] = float(dia_val)
+                elif sys_val and dia_val:
+                    bp_pairs.setdefault(d, {})["systolic"] = float(sys_val)
+                    bp_pairs.setdefault(d, {})["diastolic"] = float(dia_val)
+                continue
+
+            # kind == "vital"
+            qty = entry.get("qty")
+            if qty is None:
+                continue
+            daily_vitals.setdefault((metric, d), []).append(float(qty))
+
+    # Flush daily vitals
+    for (metric, d), values in daily_vitals.items():
+        agg = sum(values) if metric == "steps" else sum(values) / len(values)
+        u = "bpm" if metric == "heart_rate" else "ml/kg/min" if metric == "vo2_max" else "%" if metric == "spo2" else "ms" if metric == "hrv" else ""
+        record_vital(root, person_id, d.isoformat(), metric, str(agg), u, "Health Auto Export")
+        counts[metric] = counts.get(metric, 0) + 1
+
+    # Flush BP
+    for d, parts in bp_pairs.items():
+        sys = parts.get("systolic")
+        dia = parts.get("diastolic")
+        if sys and dia:
+            record_vital(root, person_id, d.isoformat(), "blood_pressure",
+                         f"{int(sys)}/{int(dia)}", "mmHg", "Health Auto Export")
+            counts["blood_pressure"] = counts.get("blood_pressure", 0) + 1
+
+    # Flush sleep
+    if sleep_per_day:
+        with workspace_lock(root, person_id):
+            profile = load_profile(root, person_id)
+            checkins = list(profile.get("daily_checkins", []))
+            existing_dates = {str(c.get("date", ""))[:10] for c in checkins}
+            for d, hours in sleep_per_day.items():
+                if d.isoformat() not in existing_dates:
+                    checkins.append({
+                        "date": d.isoformat(),
+                        "sleep_hours": round(hours, 1),
+                        "notes": "imported from Health Auto Export",
+                    })
+            profile["daily_checkins"] = sorted(checkins, key=lambda c: str(c.get("date", "")))
+            save_profile(root, person_id, profile)
+        counts["sleep"] = len(sleep_per_day)
+
+    return counts
+
+
 def import_wearable_file(root: Path, person_id: str, file_path: Path) -> dict[str, int]:
     """Detect format and import. Returns counts of records added per metric."""
     if not file_path.exists():
@@ -203,4 +326,6 @@ def import_wearable_file(root: Path, person_id: str, file_path: Path) -> dict[st
         return _import_apple_xml(root, person_id, file_path)
     if name.endswith(".csv"):
         return _import_csv(root, person_id, file_path)
+    if name.endswith(".json"):
+        return _import_health_auto_export_json(root, person_id, file_path)
     raise ValueError(f"Unsupported wearable file format: {file_path.suffix}")
