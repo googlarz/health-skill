@@ -85,6 +85,17 @@ try:
     from .providers import add_provider as providers_add, write_providers
     from .wearable_import import import_wearable_file
     from .triage import write_triage
+    from .forecasting import write_forecast
+    from .lab_actions import write_lab_actions
+    from .nutrition import log_meal, write_nutrition
+    from .decisions import write_hrt_decision, write_statin_decision, write_screening_decision
+    from .wearable_sync import sync_wearable_inbox
+    from .household import (
+        add_member as hh_add_member,
+        add_relationship as hh_add_rel,
+        cascade_family_history as hh_cascade,
+        write_household_dashboard,
+    )
     from .care_workspace import connections_path
     from .rendering import (
         build_timeline_events,
@@ -190,6 +201,17 @@ except ImportError:
     from providers import add_provider as providers_add, write_providers
     from wearable_import import import_wearable_file
     from triage import write_triage
+    from forecasting import write_forecast
+    from lab_actions import write_lab_actions
+    from nutrition import log_meal, write_nutrition
+    from decisions import write_hrt_decision, write_statin_decision, write_screening_decision
+    from wearable_sync import sync_wearable_inbox
+    from household import (
+        add_member as hh_add_member,
+        add_relationship as hh_add_rel,
+        cascade_family_history as hh_cascade,
+        write_household_dashboard,
+    )
     from care_workspace import connections_path
     from rendering import (
         build_timeline_events,
@@ -1549,6 +1571,67 @@ def build_parser() -> argparse.ArgumentParser:
     triage_parser.add_argument("--q5", default="")
     triage_parser.set_defaults(func=_command_triage)
 
+    # v1.9: forecasting, lab-actions, nutrition
+    forecast_parser = subparsers.add_parser("forecast", help="Generate HEALTH_FORECAST.md (lab/weight projections)")
+    forecast_parser.add_argument("--root", required=True)
+    forecast_parser.add_argument("--person-id", default="")
+    forecast_parser.set_defaults(func=_command_forecast)
+
+    lab_actions_parser = subparsers.add_parser("lab-actions", help="Generate LAB_ACTIONS.md from abnormal labs")
+    lab_actions_parser.add_argument("--root", required=True)
+    lab_actions_parser.add_argument("--person-id", default="")
+    lab_actions_parser.set_defaults(func=_command_lab_actions)
+
+    log_meal_parser = subparsers.add_parser("log-meal", help='Log a meal: "chicken 200g, rice 1 cup, broccoli"')
+    log_meal_parser.add_argument("--root", required=True)
+    log_meal_parser.add_argument("--person-id", default="")
+    log_meal_parser.add_argument("--text", required=True)
+    log_meal_parser.add_argument("--date", default="")
+    log_meal_parser.set_defaults(func=_command_log_meal)
+
+    nutrition_parser = subparsers.add_parser("nutrition", help="Render NUTRITION.md (14-day rolling)")
+    nutrition_parser.add_argument("--root", required=True)
+    nutrition_parser.add_argument("--person-id", default="")
+    nutrition_parser.set_defaults(func=_command_nutrition)
+
+    # v2.0: decision support, wearable sync, household
+    decide_parser = subparsers.add_parser("decide", help="Generate decision aid: hrt | statin | screening")
+    decide_parser.add_argument("--root", required=True)
+    decide_parser.add_argument("--person-id", default="")
+    decide_parser.add_argument("--topic", required=True, choices=["hrt", "statin", "screening"])
+    decide_parser.set_defaults(func=_command_decide)
+
+    sync_parser = subparsers.add_parser("sync-wearable", help="Process every file in inbox/wearable/")
+    sync_parser.add_argument("--root", required=True)
+    sync_parser.add_argument("--person-id", default="")
+    sync_parser.set_defaults(func=_command_sync_wearable)
+
+    hh_member_parser = subparsers.add_parser("household-add-member", help="Add a person to the household graph")
+    hh_member_parser.add_argument("--root", required=True)
+    hh_member_parser.add_argument("--id", required=True, dest="member_id")
+    hh_member_parser.add_argument("--name", required=True)
+    hh_member_parser.add_argument("--folder", required=True)
+    hh_member_parser.add_argument("--date-of-birth", default="")
+    hh_member_parser.add_argument("--sex", default="")
+    hh_member_parser.set_defaults(func=_command_hh_add_member)
+
+    hh_rel_parser = subparsers.add_parser("household-add-relationship", help="Add a relationship between members")
+    hh_rel_parser.add_argument("--root", required=True)
+    hh_rel_parser.add_argument("--from", dest="from_id", required=True)
+    hh_rel_parser.add_argument("--to", dest="to_id", required=True)
+    hh_rel_parser.add_argument("--type", required=True, dest="rel_type",
+                                help="mother, father, sister, brother, daughter, son, parent, child, sibling")
+    hh_rel_parser.set_defaults(func=_command_hh_add_rel)
+
+    hh_cascade_parser = subparsers.add_parser("household-cascade",
+                                               help="Cascade conditions across the household as family history")
+    hh_cascade_parser.add_argument("--root", required=True)
+    hh_cascade_parser.set_defaults(func=_command_hh_cascade)
+
+    hh_dash_parser = subparsers.add_parser("household-dashboard", help="Render HOUSEHOLD_DASHBOARD.md")
+    hh_dash_parser.add_argument("--root", required=True)
+    hh_dash_parser.set_defaults(func=_command_hh_dashboard)
+
     return parser
 
 
@@ -1676,6 +1759,93 @@ def _command_triage(args: argparse.Namespace) -> int:
     answers = {"q1": args.q1, "q2": args.q2, "q3": args.q3, "q4": args.q4, "q5": args.q5}
     path = write_triage(root, args.person_id, args.summary, answers)
     print(path)
+    return 0
+
+
+def _command_forecast(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    print(write_forecast(root, args.person_id))
+    return 0
+
+
+def _command_lab_actions(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    print(write_lab_actions(root, args.person_id))
+    return 0
+
+
+def _command_log_meal(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    entry = log_meal(root, args.person_id, args.text, when=args.date)
+    print(f"Logged meal: ~{entry['kcal']} kcal, {entry['protein']}g protein, {entry['fiber']}g fiber")
+    return 0
+
+
+def _command_nutrition(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    print(write_nutrition(root, args.person_id))
+    return 0
+
+
+def _command_decide(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    if args.topic == "hrt":
+        path = write_hrt_decision(root, args.person_id)
+    elif args.topic == "statin":
+        path = write_statin_decision(root, args.person_id)
+    else:
+        path = write_screening_decision(root, args.person_id)
+    print(path)
+    return 0
+
+
+def _command_sync_wearable(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    summary = sync_wearable_inbox(root, args.person_id)
+    print(f"Processed: {summary['files_processed']} | Skipped: {summary['files_skipped']}")
+    if summary["totals"]:
+        print("Imported:")
+        for k, v in summary["totals"].items():
+            print(f"  - {k}: {v}")
+    if summary["errors"]:
+        print("Errors:")
+        for e in summary["errors"]:
+            print(f"  - {e['file']}: {e['error']}")
+    return 0
+
+
+def _command_hh_add_member(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    member = hh_add_member(root, args.member_id, args.name, args.folder,
+                           date_of_birth=args.date_of_birth, sex=args.sex)
+    print(f"Added member: {member['id']} ({member['name']})")
+    return 0
+
+
+def _command_hh_add_rel(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    rel = hh_add_rel(root, args.from_id, args.to_id, args.rel_type)
+    print(f"Added relationship: {rel['from']} → {rel['to']} ({rel['type']})")
+    return 0
+
+
+def _command_hh_cascade(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    summary = hh_cascade(root)
+    print(f"Cascaded {summary['entries_added']} family-history entries across "
+          f"{summary['members_updated']} member(s).")
+    return 0
+
+
+def _command_hh_dashboard(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    print(write_household_dashboard(root))
     return 0
 
 

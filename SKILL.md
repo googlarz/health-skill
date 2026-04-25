@@ -462,11 +462,103 @@ When user asks "what can you do", offer:
 - Connection insights across all data
 - Menopause and hormonal health support (HRT context, symptom tracking, bone-protective exercise)
 - Photo analysis (posture, skin, medication bottles, lab screenshots, food)
-- Wearable data import (Apple Health export, generic CSV)
+- Wearable data import (Apple Health export, generic CSV, auto-sync from inbox/wearable/)
 - Goal setting and progress tracking
 - Provider directory (your care team)
 - Structured symptom triage with red-flag detection
 - Proactive nudges and weekly recaps
+- **Forecasting** — project labs and weight forward 3–6 months from your data
+- **Lab-to-action** — every abnormal lab gets a clinician question + lifestyle note + portal message
+- **Nutrition tracking** — natural-language meal log with calories, protein, fiber, sodium
+- **Decision support** — structured aids for HRT, statin, screening intensity
+- **Household / family graph** — multi-person workspace with automatic family-history cascade
+
+### Forecasting (v1.9)
+
+When the user asks "where am I headed" or has 3+ data points on a marker, run `forecast`. Output: HEALTH_FORECAST.md with linear projections + 95% CI + ETA to user-defined targets.
+
+Use cases:
+- Trending up/down on labs ("at this rate you hit goal LDL by August")
+- Weight projection at current trajectory
+- TSH/A1C drift detection
+
+Always frame as projection, not prediction. Confidence is `high`/`medium`/`low` based on data points and R².
+
+### Lab-to-action (v1.9)
+
+After every `process-inbox` or on demand, run `lab-actions`. For each abnormal marker (LDL, HDL, A1C, TSH, Glucose, Vitamin D, Triglycerides, Total Cholesterol, Creatinine, ALT), produces:
+
+- Plain-language meaning
+- Lifestyle considerations (with safety wrap)
+- Recommended recheck cadence
+- 2–4 specific clinician questions
+- Combined drafted portal message
+
+Read the output and offer to copy the portal message into the user's chat with their clinician's portal.
+
+### Nutrition (v1.9)
+
+When the user mentions food in natural language ("had chicken and rice for lunch"), offer to log it:
+
+```bash
+scripts/care_workspace.py log-meal --root . --text "chicken breast 200g, rice 1 cup, broccoli"
+```
+
+The parser matches against ~80 common foods, estimates calories/protein/fiber/sodium per portion. Aggregates daily and 14-day rolling. Surface in NUTRITION.md.
+
+Coaching cues:
+- Protein <80g/day → suggest more (1.2–1.6 g/kg target)
+- Fiber <25g/day → suggest beans, oats, berries
+- Sodium >2300mg → flag bread/cheese/restaurant meals as common drivers
+
+### Decision support (v2.0)
+
+When the user faces a major medical choice, offer the structured aid:
+
+| Question | Run |
+|---|---|
+| "Should I start HRT?" | `decide --topic hrt` |
+| "Should I start a statin?" | `decide --topic statin` |
+| "How often should I screen?" | `decide --topic screening` |
+
+Each aid is a structured shared-decision-making artifact:
+- Pros specific to their data
+- Cons / what to weigh
+- What's missing to make the call (drives next labs/conversations)
+- Drafted clinician questions
+
+Always frame as conversation tool, never as recommendation. End every aid with "discuss with your clinician before starting, stopping, or changing any medication."
+
+### Live wearable sync (v2.0)
+
+When the user mentions Apple Watch / Oura / Whoop / Garmin or asks to automate health data import, point them to [`references/wearable-sync.md`](references/wearable-sync.md). Three paths:
+
+- **iOS Shortcut → daily CSV** (recommended, hands-free)
+- **Apple Health full export** (weekly, comprehensive)
+- **Oura/Whoop/Garmin CSV download** (per-platform)
+
+All write to `<person-folder>/inbox/wearable/`. Run `sync-wearable` to process and archive everything.
+
+### Household / family graph (v2.0)
+
+For families and caregivers managing multiple people, the household graph stores members + relationships at workspace root (HOUSEHOLD.json):
+
+```bash
+scripts/care_workspace.py household-add-member --root . \
+  --id self --name "Anna" --folder anna --date-of-birth 1985-03-12 --sex female
+
+scripts/care_workspace.py household-add-relationship --root . \
+  --from self --to mom --type mother
+
+scripts/care_workspace.py household-cascade --root .
+```
+
+The cascade pushes a relative's diagnosed cancer or cardiac condition into every connected member's `family_history` automatically — which then feeds `preventive-check` to pull screening start dates forward.
+
+Use cases:
+- Mom diagnosed with breast cancer at 48 → daughter's mammogram start age becomes 38 automatically
+- Father with early MI → son's lipid panel cadence becomes annual from age 25
+- Shared household medication list across folders for cross-conflict checks
 
 ### Photo Handling
 

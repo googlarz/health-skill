@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-129%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-146%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-1.8-purple" alt="v1.8">
+    <img src="https://img.shields.io/badge/version-2.0-purple" alt="v2.0">
   </p>
 </p>
 
@@ -133,6 +133,14 @@ Always read HEALTH_DOSSIER.md before answering health questions.
 | **Add a care-team provider** | `add-provider --root . --name "Dr Smith" --role pcp` |
 | **Import wearable data** | `import-wearable --root . --file inbox/export.xml` |
 | **Run structured triage** | `triage --root . --summary "knee pain" --q1 "..." --q2 "..."` |
+| **Forecast labs and weight** | `forecast --root .` |
+| **Generate lab-to-action plan** | `lab-actions --root .` |
+| **Log a meal** | `log-meal --root . --text "chicken 200g, rice 1 cup, broccoli"` |
+| **Nutrition trends** | `nutrition --root .` |
+| **HRT / statin / screening decision aid** | `decide --root . --topic hrt` |
+| **Auto-sync wearable inbox** | `sync-wearable --root .` |
+| **Add household member** | `household-add-member --root . --id self --name "Anna" --folder anna` |
+| **Cascade family history** | `household-cascade --root .` |
 | Check extraction accuracy | `extraction-audit --root .` |
 
 See [docs/commands.md](docs/commands.md) for the full reference.
@@ -167,6 +175,19 @@ See [docs/files.md](docs/files.md) for the complete list.
 **Visual outputs** — Status chips (✅/⚠️), sparkline charts, trend arrows, and bold key numbers. Designed for scanning when tired or stressed.
 
 **Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
+
+## What's new in v2.0
+
+The skill is no longer a filing cabinet — it predicts, recommends actions, supports decisions, and works for whole households.
+
+- **🔮 Forecasting** — `forecast` projects each lab marker and weight forward 3–6 months using linear regression with 95% confidence intervals. "At this rate you hit your LDL goal by August."
+- **⚙️ Lab-to-action** — `lab-actions` turns every abnormal lab into a clinician question + lifestyle consideration + recheck cadence + drafted portal message. The loop from result to action becomes one click.
+- **🍽 Nutrition tracker** — `log-meal "chicken 200g, rice 1 cup, broccoli"` parses ~80 common foods into calories/protein/fiber/sodium, aggregates 14-day trends, coaches on gaps.
+- **🧭 Decision support** — `decide --topic hrt|statin|screening` produces structured shared-decision-making aids personalised to your data: pros, cons, what's missing, questions to bring.
+- **⌚ Live wearable sync** — `sync-wearable` processes everything in `inbox/wearable/`. Pair with the iOS Shortcut recipe in [`references/wearable-sync.md`](references/wearable-sync.md) for daily auto-sync from your Apple Watch.
+- **👨‍👩‍👧 Household / family graph** — `household-add-member` + `household-cascade` push a parent's diagnosed cancer or cardiac event into every connected member's family history automatically, which adjusts their preventive screening dates.
+
+---
 
 ## What's new in v1.8
 

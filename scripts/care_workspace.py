@@ -324,6 +324,42 @@ def triage_path(root: Path, person_id: str, slug: str) -> Path:
     return person_dir(root, person_id) / "notes" / f"{date.today().isoformat()}-triage-{slug}.md"
 
 
+def forecast_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "HEALTH_FORECAST.md"
+
+
+def lab_actions_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "LAB_ACTIONS.md"
+
+
+def nutrition_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "NUTRITION.md"
+
+
+def nutrition_trends_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "NUTRITION_TRENDS.md"
+
+
+def decisions_dir(root: Path, person_id: str) -> Path:
+    d = exports_dir(root, person_id) / "decisions"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def wearable_inbox(root: Path, person_id: str) -> Path:
+    d = person_dir(root, person_id) / "inbox" / "wearable"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def household_path(root: Path) -> Path:
+    return root / "HOUSEHOLD.json"
+
+
+def household_dashboard_path(root: Path) -> Path:
+    return root / "HOUSEHOLD_DASHBOARD.md"
+
+
 def extraction_accuracy_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "EXTRACTION_ACCURACY.md"
 
