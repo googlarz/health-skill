@@ -1,23 +1,23 @@
 <p align="center">
   <h1 align="center">Health Skill</h1>
   <p align="center">
-    Local-first health workspace and longevity companion for Claude — organize records, track labs, log check-ins, plan training, prepare for visits, keep memory across sessions.
+    A health workspace and longevity companion for Claude — connects your labs, medications, training, sleep, and family history so you can get more out of every conversation and every doctor's visit.
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-146%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-152%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.0-purple" alt="v2.0">
+    <img src="https://img.shields.io/badge/version-2.1-purple" alt="v2.1">
   </p>
 </p>
 
 ---
 
-> One person = one folder. The folder is the memory, not the chat.
+> Claude that remembers your health history — and reasons across all of it.
 
-Health Skill gives Claude a **durable workspace** so it can reason across your full health picture — labs connected to medications connected to follow-ups — instead of starting from scratch every conversation.
+Most health conversations with AI start from scratch. Health Skill gives Claude a **persistent workspace** that connects your labs to your medications, your sleep to your pain, your family history to your screening schedule — so every conversation builds on the last.
 
-It also works as a **daily longevity companion**: log how you feel, track your cycle, design training plans, monitor preventive care, and discover cross-domain patterns (sleep → pain → mood → labs).
+It's also a **daily longevity companion**: log check-ins, track your cycle, design training plans, monitor preventive care, sync your watch automatically, and discover patterns across your entire health picture.
 
 ## Contents
 
