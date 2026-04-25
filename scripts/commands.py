@@ -97,6 +97,15 @@ try:
     from .fhir_import import import_fhir_file
     from .mental_health import write_mental_health_report
     from .lab_ranges import render_range_context, personalised_range, flag_lab_value
+    from .pharmacogenomics import import_pgx_file, render_pgx_report as build_pgx_report
+    from .appointments import (
+        build_pre_visit_brief,
+        get_upcoming_appointments,
+        add_appointment,
+        list_appointments,
+    )
+    from .post_visit import extract_visit_data, merge_visit_data, write_post_visit_summary
+    from .mens_health import build_mens_health_report
     from .household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -220,6 +229,15 @@ except ImportError:
     from fhir_import import import_fhir_file  # type: ignore
     from mental_health import write_mental_health_report  # type: ignore
     from lab_ranges import render_range_context, personalised_range, flag_lab_value  # type: ignore
+    from pharmacogenomics import import_pgx_file, render_pgx_report as build_pgx_report  # type: ignore
+    from appointments import (  # type: ignore
+        build_pre_visit_brief,
+        get_upcoming_appointments,
+        add_appointment,
+        list_appointments,
+    )
+    from post_visit import extract_visit_data, merge_visit_data, write_post_visit_summary  # type: ignore
+    from mens_health import build_mens_health_report  # type: ignore
     from household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -1699,6 +1717,54 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Optional: value to flag against range")
     lr_parser.set_defaults(func=_command_lab_range)
 
+    # --- Pharmacogenomics ---
+    pgx_parser = subparsers.add_parser(
+        "import-pgx", help="Import 23andMe/AncestryDNA raw genotype file for pharmacogenomics")
+    pgx_parser.add_argument("--root", required=True)
+    pgx_parser.add_argument("--person-id", default="")
+    pgx_parser.add_argument("--file", required=True, help="Path to raw genotype file (.txt or .txt.gz)")
+    pgx_parser.set_defaults(func=_command_import_pgx)
+
+    pgx_report_parser = subparsers.add_parser(
+        "pgx-report", help="Generate pharmacogenomics report (PGX_REPORT.md)")
+    pgx_report_parser.add_argument("--root", required=True)
+    pgx_report_parser.add_argument("--person-id", default="")
+    pgx_report_parser.set_defaults(func=_command_pgx_report)
+
+    # --- Appointments ---
+    appt_add_parser = subparsers.add_parser(
+        "add-appointment", help="Add an upcoming appointment to your profile")
+    appt_add_parser.add_argument("--root", required=True)
+    appt_add_parser.add_argument("--person-id", default="")
+    appt_add_parser.add_argument("--date", required=True, help="Appointment date (YYYY-MM-DD)")
+    appt_add_parser.add_argument("--specialty", required=True, help="e.g. cardiology, GP, dermatology")
+    appt_add_parser.add_argument("--reason", default="")
+    appt_add_parser.add_argument("--provider", default="")
+    appt_add_parser.set_defaults(func=_command_add_appointment)
+
+    pre_visit_parser = subparsers.add_parser(
+        "pre-visit", help="Generate a pre-visit brief for your next appointment")
+    pre_visit_parser.add_argument("--root", required=True)
+    pre_visit_parser.add_argument("--person-id", default="")
+    pre_visit_parser.add_argument("--specialty", default="", help="Filter by specialty")
+    pre_visit_parser.set_defaults(func=_command_pre_visit)
+
+    # --- Post-visit notes ---
+    post_visit_parser = subparsers.add_parser(
+        "post-visit", help="Process visit notes and merge into your profile")
+    post_visit_parser.add_argument("--root", required=True)
+    post_visit_parser.add_argument("--person-id", default="")
+    post_visit_parser.add_argument("--notes", required=True, help="Paste visit notes text")
+    post_visit_parser.add_argument("--date", default="", help="Visit date (YYYY-MM-DD), defaults to today")
+    post_visit_parser.set_defaults(func=_command_post_visit)
+
+    # --- Men's health ---
+    mens_parser = subparsers.add_parser(
+        "mens-health", help="Generate men's health report (testosterone, PSA, CV risk)")
+    mens_parser.add_argument("--root", required=True)
+    mens_parser.add_argument("--person-id", default="")
+    mens_parser.set_defaults(func=_command_mens_health)
+
     return parser
 
 
@@ -2009,6 +2075,97 @@ def _command_lab_range(args: argparse.Namespace) -> int:
     if args.value is not None:
         flag = flag_lab_value(args.marker, args.value, profile)
         print(f"  Value {args.value}: {flag.upper()}")
+    return 0
+
+
+def _command_import_pgx(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    pgx_path = Path(args.file)
+    counts = import_pgx_file(root, args.person_id, pgx_path)
+    print("PGX import complete:")
+    for k, v in counts.items():
+        print(f"  - {k}: {v}")
+    return 0
+
+
+def _command_pgx_report(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    pgx_data = profile.get("pharmacogenomics", {})
+    if not pgx_data:
+        print("No pharmacogenomics data in profile. Run import-pgx first.")
+        return 1
+    from scripts.pharmacogenomics import pgx_drug_alerts
+    phenotypes = pgx_data.get("phenotypes", {})
+    alerts = pgx_drug_alerts(phenotypes, profile.get("medications", []))
+    variants_found = pgx_data.get("variants_found", 0)
+    text = build_pgx_report(phenotypes, alerts, variants_found=variants_found)
+    out_path = Path(root) / (args.person_id or "") / "PGX_REPORT.md"
+    atomic_write_text(out_path, text)
+    print(f"PGX report written: {out_path}")
+    return 0
+
+
+def _command_add_appointment(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    appt = add_appointment(
+        profile,
+        date_str=args.date,
+        specialty=args.specialty,
+        reason=args.reason,
+        provider=args.provider,
+    )
+    save_profile(root, args.person_id, profile)
+    print(f"Appointment added: {appt['specialty']} on {appt['date']}")
+    return 0
+
+
+def _command_pre_visit(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    upcoming = get_upcoming_appointments(profile, days_ahead=60)
+    if args.specialty:
+        upcoming = [a for a in upcoming if args.specialty.lower() in a.get("specialty", "").lower()]
+    if not upcoming:
+        print("No upcoming appointments found. Add one with add-appointment.")
+        return 0
+    appt = upcoming[0]
+    text = build_pre_visit_brief(profile, appt)
+    out_path = Path(root) / (args.person_id or "") / "PRE_VISIT_BRIEF.md"
+    atomic_write_text(out_path, text)
+    print(text)
+    return 0
+
+
+def _command_post_visit(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    visit_data = extract_visit_data(args.notes)
+    visit_date = args.date or None
+    counts = merge_visit_data(profile, visit_data, visit_date)
+    save_profile(root, args.person_id, profile)
+    summary = write_post_visit_summary(profile, visit_data, visit_date)
+    out_path = Path(root) / (args.person_id or "") / "POST_VISIT_SUMMARY.md"
+    atomic_write_text(out_path, summary)
+    print(summary)
+    print(f"\nMerged: {counts}")
+    return 0
+
+
+def _command_mens_health(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    text = build_mens_health_report(profile)
+    out_path = Path(root) / (args.person_id or "") / "MENS_HEALTH.md"
+    atomic_write_text(out_path, text)
+    print(text)
     return 0
 
 

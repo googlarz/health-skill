@@ -5,7 +5,7 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-192%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-224%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
     <img src="https://img.shields.io/badge/version-2.2-purple" alt="v2.2">
   </p>
@@ -403,15 +403,26 @@ See [docs/files.md](docs/files.md) for the complete list.
 
 ## What's new in v2.2
 
-Six new features across safety, clinical depth, and ambient monitoring — shipped as one release.
+Thirteen new features across safety, clinical depth, ambient monitoring, and equal coverage for men and women — shipped as one release.
 
-- **💊 Drug-drug interaction checker** — `check-interactions` scans your full medication list against a curated database of 20+ clinically significant interactions. Warfarin + ibuprofen, SSRIs + MAOIs, statins + clarithromycin, metformin + contrast dye, and more. Each alert includes the mechanism, the risk, and exactly what to do.
-- **🎯 Personalised lab reference ranges** — standard ranges assume a healthy adult. `lab-range` adjusts your LDL target if you have diabetes (→ <100), your TSH range if you're on levothyroxine (→ 0.5–2.5), your haemoglobin range by sex, and dozens more condition × marker × medication combinations.
-- **📈 Medication side-effect timeline** — `side-effects` correlates your medication start dates with your daily check-in data. If your pain scores jumped 3 points after starting a statin, or your sleep disrupted after starting an SSRI, the signal surfaces automatically.
-- **📅 Monthly insight report** — `monthly-report` generates a one-page summary of your last 30 days: mood/sleep/energy/pain trends with sparklines, training volume, new labs, weight delta, and one specific action item.
-- **🏥 FHIR R4 import** — `import-fhir` imports health records directly from patient portals (Epic MyChart, Cerner, Apple Health Records). Extracts conditions, medications, allergies, immunisations, and lab observations. No copy-pasting.
-- **🧠 Mental health layer** — `mental-health` runs a PHQ-2 (depression) and GAD-2 (anxiety) proxy from your check-in mood scores, and a burnout detector that flags sustained low energy + mood + sleep. Includes crisis line resources.
-- **🔔 Continuous pattern alerts** — integrated into the existing `nudges` command. Now detects: chronic sleep deficit (avg <6h for 7 days), sustained low mood + energy (burnout signal), consistently high pain (avg ≥5/10 for a week), and rapid weight gain (>2kg in 2 weeks).
+**Core safety & insights**
+- **💊 Drug-drug interaction checker** — `check-interactions` scans your full medication list against 20+ clinically significant interactions. Warfarin + ibuprofen, SSRIs + MAOIs, statins + clarithromycin, metformin + contrast dye, and more. Each alert includes mechanism, risk, and exactly what to do.
+- **🎯 Personalised lab reference ranges** — `lab-range` adjusts your LDL target for diabetes (→ <100), TSH for levothyroxine (→ 0.5–2.5), haemoglobin by sex, and dozens more condition × medication × sex combinations.
+- **📈 Medication side-effect timeline** — `side-effects` correlates medication start dates with your daily check-ins. Pain up 3 points after starting a statin? Sleep disrupted after an SSRI? Signal surfaces automatically.
+- **📅 Monthly insight report** — `monthly-report` produces a one-page 30-day summary: mood/sleep/energy/pain sparklines, training, labs, weight delta, and one action item.
+- **🏥 FHIR R4 import** — `import-fhir` pulls conditions, medications, allergies, immunisations, and observations directly from Epic MyChart, Cerner, and Apple Health Records exports.
+- **🧠 Mental health layer** — `mental-health` runs PHQ-2 (depression) and GAD-2 (anxiety) proxies from check-in data, plus a burnout detector. Includes crisis resources.
+- **🔔 Continuous pattern alerts** — integrated into `nudges`: chronic sleep deficit, sustained low mood + energy, consistently high pain, rapid weight gain.
+
+**Pharmacogenomics**
+- **🧬 23andMe / AncestryDNA integration** — `import-pgx` parses your raw genotype file and calls phenotypes for CYP2C19, CYP2D6, CYP2C9, SLCO1B1, VKORC1, MTHFR, and DPYD. `pgx-report` cross-references your current medications — clopidogrel + CYP2C19 poor metaboliser is a critical flag, statin + SLCO1B1 variant triggers myopathy warning.
+
+**Appointment workflow**
+- **📆 Appointment management** — `add-appointment` tracks upcoming visits. `pre-visit` auto-generates a structured brief: active conditions, medications, recent labs, recent check-in trends, and specialty-specific questions to ask your doctor.
+- **📝 Post-visit note processor** — `post-visit` parses free-text visit notes to extract new diagnoses, new medications, stopped medications, labs ordered, referrals, and follow-up intervals — then merges them into your profile automatically.
+
+**Men's health (equal depth to women's module)**
+- **♂ Men's health module** — `mens-health` provides equivalent depth to the menopause module: testosterone symptom scoring, T-level staging (normal / borderline / hypogonadism), PSA trend interpretation with age-adjusted thresholds and velocity flags, erectile dysfunction as cardiovascular sentinel, full male preventive care schedule (testicular self-exam, PSA, colorectal, AAA ultrasound), and male-specific CV risk framing.
 
 ---
 
