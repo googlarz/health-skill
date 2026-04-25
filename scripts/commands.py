@@ -106,6 +106,7 @@ try:
     )
     from .post_visit import extract_visit_data, merge_visit_data, write_post_visit_summary
     from .mens_health import build_mens_health_report
+    from .html_report import write_html_report
     from .household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -238,6 +239,7 @@ except ImportError:
     )
     from post_visit import extract_visit_data, merge_visit_data, write_post_visit_summary  # type: ignore
     from mens_health import build_mens_health_report  # type: ignore
+    from html_report import write_html_report  # type: ignore
     from household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -1765,6 +1767,14 @@ def build_parser() -> argparse.ArgumentParser:
     mens_parser.add_argument("--person-id", default="")
     mens_parser.set_defaults(func=_command_mens_health)
 
+    # --- HTML dashboard ---
+    html_parser = subparsers.add_parser(
+        "dashboard", help="Generate interactive HTML health dashboard (HEALTH_DASHBOARD.html)")
+    html_parser.add_argument("--root", required=True)
+    html_parser.add_argument("--person-id", default="")
+    html_parser.add_argument("--open", action="store_true", help="Open in browser after generating")
+    html_parser.set_defaults(func=_command_dashboard)
+
     return parser
 
 
@@ -2155,6 +2165,18 @@ def _command_post_visit(args: argparse.Namespace) -> int:
     atomic_write_text(out_path, summary)
     print(summary)
     print(f"\nMerged: {counts}")
+    return 0
+
+
+def _command_dashboard(args: argparse.Namespace) -> int:
+    import subprocess
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    out_path = write_html_report(root, args.person_id, profile)
+    print(f"Dashboard written: {out_path}")
+    if getattr(args, "open", False):
+        subprocess.run(["open", str(out_path)], check=False)
     return 0
 
 

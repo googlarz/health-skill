@@ -5,7 +5,7 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-224%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-237%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
     <img src="https://img.shields.io/badge/version-2.2-purple" alt="v2.2">
   </p>
@@ -423,6 +423,9 @@ Thirteen new features across safety, clinical depth, ambient monitoring, and equ
 
 **Men's health (equal depth to women's module)**
 - **♂ Men's health module** — `mens-health` provides equivalent depth to the menopause module: testosterone symptom scoring, T-level staging (normal / borderline / hypogonadism), PSA trend interpretation with age-adjusted thresholds and velocity flags, erectile dysfunction as cardiovascular sentinel, full male preventive care schedule (testicular self-exam, PSA, colorectal, AAA ultrasound), and male-specific CV risk framing.
+
+**Interactive HTML dashboard**
+- **📊 Visual health dashboard** — `dashboard` generates a single self-contained `HEALTH_DASHBOARD.html` file you can open in any browser. Includes: 30-day KPI cards (mood, energy, sleep, pain with trend deltas), a 90-day daily trends line chart, weight timeline, lab results plotted against your personalised reference ranges (green = normal, red = out of range), active medications with duration, upcoming appointments, and condition badges. No server required — everything is embedded including Chart.js.
 
 ---
 
