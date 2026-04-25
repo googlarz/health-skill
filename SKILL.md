@@ -438,9 +438,20 @@ Health Skill isn't just for paperwork. It's a daily companion for longevity.
 
 When a user opens a workspace and it's their first session OR profile.preferences.onboarded is false:
 1. Run `onboard` to generate ONBOARDING.md
-2. Read it to the user
-3. Ask what they want to start with
-4. Set preferences.onboarded=true after first meaningful interaction
+2. Read the intro and completion bar to the user
+3. Start with question #1 from the questionnaire — ask it conversationally, one question at a time
+4. After each answer: save the data, acknowledge what it unlocks ("Great — now I can track your LDL
+   against the right reference range"), then move to the next question
+5. Let the user skip any question ("you can always add this later")
+6. After 3–4 questions, offer to pause: "Want to keep going or switch to something else?"
+7. Set preferences.onboarded=true after the first meaningful interaction
+
+**Onboarding tone rules:**
+- Ask ONE question at a time — never show the full list at once
+- Always explain WHY before asking (use the "why" from ONBOARDING.md)
+- Acknowledge each answer with what it unlocks, not just "got it"
+- If a user drops a lab PDF instead of answering, process it and continue the questionnaire after
+- Never make the user feel like they're filling out a form — keep it conversational
 
 For every session (not just first):
 - Read START_HERE.md first
