@@ -50,199 +50,339 @@ def build_html_report(profile: dict[str, Any]) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{name} — Health Report</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     :root {{
-      --bg: #0f1117; --surface: #1a1d27; --surface2: #232637;
-      --accent: #6c8fef; --accent2: #5dd6a8; --accent3: #f5a623;
-      --text: #e2e8f0; --muted: #8892a4; --danger: #f87171; --border: #2d3148;
+      --bg: #f7f8fc;
+      --surface: #ffffff;
+      --surface2: #f0f2f8;
+      --border: #e4e7f0;
+      --text: #1a1d2e;
+      --text2: #4b5168;
+      --muted: #8b91a8;
+      --blue: #4f6ef7;
+      --blue-light: #eef1fe;
+      --green: #16a34a;
+      --green-light: #dcfce7;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --teal: #0d9488;
+      --teal-light: #ccfbf1;
     }}
-    body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; min-height: 100vh; }}
-    h1 {{ font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }}
-    h2 {{ font-size: 1rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }}
-    .subtitle {{ color: var(--muted); font-size: 0.85rem; margin-bottom: 32px; }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }}
+    /* ── Layout ── */
+    .page {{ max-width: 1120px; margin: 0 auto; padding: 40px 24px 64px; }}
     .grid {{ display: grid; gap: 20px; }}
     .grid-4 {{ grid-template-columns: repeat(4, 1fr); }}
-    .grid-2 {{ grid-template-columns: repeat(2, 1fr); }}
-    .grid-3 {{ grid-template-columns: repeat(3, 1fr); }}
-    @media (max-width: 900px) {{ .grid-4 {{ grid-template-columns: repeat(2, 1fr); }} .grid-2, .grid-3 {{ grid-template-columns: 1fr; }} }}
-    @media (max-width: 480px) {{ .grid-4 {{ grid-template-columns: 1fr 1fr; }} }}
-    .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }}
-    .card-chart {{ padding: 20px 20px 12px; }}
-    .kpi-value {{ font-size: 2.4rem; font-weight: 800; line-height: 1; }}
-    .kpi-label {{ color: var(--muted); font-size: 0.8rem; margin-top: 6px; }}
-    .kpi-delta {{ font-size: 0.78rem; margin-top: 4px; }}
-    .delta-up {{ color: var(--accent2); }} .delta-down {{ color: var(--danger); }} .delta-flat {{ color: var(--muted); }}
-    .chart-wrap {{ position: relative; height: 260px; }}
-    .chart-wrap-sm {{ position: relative; height: 200px; }}
-    .section {{ margin-bottom: 32px; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
-    th {{ color: var(--muted); font-weight: 500; text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--border); }}
-    td {{ padding: 8px 12px; border-bottom: 1px solid var(--border); }}
-    tr:last-child td {{ border-bottom: none; }}
-    .badge {{ display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.72rem; font-weight: 600; }}
-    .badge-green {{ background: rgba(93,214,168,.18); color: var(--accent2); }}
-    .badge-yellow {{ background: rgba(245,166,35,.18); color: var(--accent3); }}
-    .badge-red {{ background: rgba(248,113,113,.18); color: var(--danger); }}
-    .badge-blue {{ background: rgba(108,143,239,.18); color: var(--accent); }}
-    .badge-gray {{ background: var(--surface2); color: var(--muted); }}
-    .appt-row {{ display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }}
-    .appt-row:last-child {{ border-bottom: none; }}
-    .appt-date {{ font-size: 0.75rem; color: var(--muted); min-width: 90px; }}
-    .appt-name {{ font-size: 0.88rem; font-weight: 500; }}
-    .appt-reason {{ font-size: 0.78rem; color: var(--muted); }}
-    .empty {{ color: var(--muted); font-size: 0.85rem; padding: 12px 0; }}
-    .med-bar {{ display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 0.82rem; }}
-    .med-line {{ height: 8px; border-radius: 4px; background: var(--accent); opacity: 0.7; min-width: 4px; }}
-    footer {{ margin-top: 40px; color: var(--muted); font-size: 0.75rem; text-align: center; }}
+    .grid-2 {{ grid-template-columns: 1fr 1fr; }}
+    @media (max-width: 960px) {{
+      .grid-4 {{ grid-template-columns: repeat(2, 1fr); }}
+      .grid-2 {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 480px) {{
+      .grid-4 {{ grid-template-columns: 1fr 1fr; }}
+    }}
+    /* ── Header ── */
+    .header {{ margin-bottom: 40px; }}
+    .header-top {{ display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; }}
+    .header h1 {{ font-size: 1.75rem; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }}
+    .header .date-badge {{
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--blue-light); color: var(--blue);
+      padding: 6px 14px; border-radius: 99px; font-size: 0.78rem; font-weight: 600;
+    }}
+    .header .subtitle {{ margin-top: 6px; color: var(--muted); font-size: 0.84rem; }}
+    /* ── Section labels ── */
+    .section {{ margin-bottom: 36px; }}
+    .section-label {{
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+    }}
+    /* ── Cards ── */
+    .card {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.03);
+    }}
+    .card-chart {{ padding: 24px 24px 16px; }}
+    /* ── KPI cards ── */
+    .kpi-icon {{
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; margin-bottom: 14px;
+    }}
+    .kpi-value {{
+      font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+    }}
+    .kpi-suffix {{ font-size: 0.95rem; font-weight: 500; color: var(--muted); margin-left: 2px; }}
+    .kpi-label {{ font-size: 0.8rem; font-weight: 500; color: var(--text2); margin-top: 6px; }}
+    .kpi-delta {{
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 0.72rem; font-weight: 600; margin-top: 8px;
+      padding: 3px 8px; border-radius: 99px;
+    }}
+    .delta-up {{ background: var(--green-light); color: var(--green); }}
+    .delta-down {{ background: var(--red-light); color: var(--red); }}
+    .delta-neutral {{ background: var(--surface2); color: var(--muted); }}
+    /* ── Chart wraps ── */
+    .chart-wrap {{ position: relative; height: 280px; }}
+    .chart-wrap-sm {{ position: relative; height: 220px; }}
+    /* ── Chart header (title + legend in card) ── */
+    .chart-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }}
+    .chart-title {{ font-size: 0.88rem; font-weight: 600; color: var(--text); }}
+    .legend {{ display: flex; flex-wrap: wrap; gap: 12px; }}
+    .legend-item {{ display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--text2); font-weight: 500; }}
+    .legend-dot {{ width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }}
+    /* ── List rows ── */
+    .row {{ display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }}
+    .row:last-child {{ border-bottom: none; }}
+    .row:first-child {{ padding-top: 0; }}
+    /* ── Medications ── */
+    .med-dot {{ width: 10px; height: 10px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }}
+    .med-name {{ font-size: 0.88rem; font-weight: 600; color: var(--text); }}
+    .med-detail {{ font-size: 0.75rem; color: var(--muted); margin-top: 1px; }}
+    .med-dur {{
+      margin-left: auto; font-size: 0.72rem; font-weight: 600;
+      background: var(--surface2); color: var(--text2);
+      padding: 3px 8px; border-radius: 99px; white-space: nowrap;
+    }}
+    /* ── Appointments ── */
+    .appt-col {{ display: flex; flex-direction: column; }}
+    .appt-name {{ font-size: 0.88rem; font-weight: 600; }}
+    .appt-reason {{ font-size: 0.75rem; color: var(--muted); margin-top: 1px; }}
+    /* ── Badges ── */
+    .badge {{
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 99px;
+      font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+    }}
+    .badge-red    {{ background: var(--red-light);    color: var(--red);    }}
+    .badge-amber  {{ background: var(--amber-light);  color: var(--amber);  }}
+    .badge-blue   {{ background: var(--blue-light);   color: var(--blue);   }}
+    .badge-green  {{ background: var(--green-light);  color: var(--green);  }}
+    .badge-gray   {{ background: var(--surface2);     color: var(--muted);  }}
+    .badge-purple {{ background: var(--purple-light); color: var(--purple); }}
+    /* ── Condition chips ── */
+    .chips {{ display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }}
+    .chip {{
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--blue-light); color: var(--blue);
+      border: 1px solid rgba(79,110,247,.15);
+      padding: 5px 12px; border-radius: 8px;
+      font-size: 0.8rem; font-weight: 500;
+    }}
+    /* ── Empty state ── */
+    .empty {{ color: var(--muted); font-size: 0.84rem; padding: 8px 0; }}
+    /* ── Footer ── */
+    footer {{
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+      color: var(--muted); font-size: 0.75rem;
+    }}
+    footer strong {{ color: var(--text2); }}
+    .footer-note {{ display: flex; align-items: center; gap: 5px; }}
   </style>
 </head>
 <body>
+<div class="page">
 
-<div class="section">
-  <h1>{name}</h1>
-  <p class="subtitle">Health report · Generated {generated} · Data covers your full profile history</p>
+<!-- Header -->
+<div class="header">
+  <div class="header-top">
+    <h1>{name}</h1>
+    <span class="date-badge">📅 Generated {generated}</span>
+  </div>
+  <p class="subtitle">Personal health overview · All data stays on your device</p>
 </div>
 
-<!-- Overview KPI cards -->
+<!-- KPI cards -->
 <div class="section">
-  <h2>30-day averages</h2>
+  <div class="section-label">30-day averages</div>
   <div class="grid grid-4">
-    {_kpi_card("Mood", overview["mood"], "/10", overview["mood_delta"], "#6c8fef")}
-    {_kpi_card("Energy", overview["energy"], "/10", overview["energy_delta"], "#5dd6a8")}
-    {_kpi_card("Sleep", overview["sleep"], "h", overview["sleep_delta"], "#c084fc")}
-    {_kpi_card("Pain", overview["pain"], "/10", overview["pain_delta"], "#f87171", invert=True)}
+    {_kpi_card("Mood", overview["mood"], "/10", overview["mood_delta"], "😊", "#4f6ef7", "#eef1fe")}
+    {_kpi_card("Energy", overview["energy"], "/10", overview["energy_delta"], "⚡", "#0d9488", "#ccfbf1")}
+    {_kpi_card("Sleep", overview["sleep"], "h", overview["sleep_delta"], "🌙", "#7c3aed", "#ede9fe")}
+    {_kpi_card("Pain", overview["pain"], "/10", overview["pain_delta"], "🩹", "#dc2626", "#fee2e2", invert=True)}
   </div>
 </div>
 
-<!-- Daily trends chart -->
+<!-- Daily trends -->
 <div class="section">
-  <h2>Daily trends (last 90 days)</h2>
   <div class="card card-chart">
+    <div class="chart-header">
+      <span class="chart-title">Daily trends — last 90 days</span>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4f6ef7"></div>Mood</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#0d9488"></div>Energy</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>Sleep</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Pain</div>
+      </div>
+    </div>
     <div class="chart-wrap">
       <canvas id="trendsChart"></canvas>
     </div>
   </div>
 </div>
 
-<!-- Weight + Labs side by side -->
+<!-- Weight + Labs -->
 <div class="section grid grid-2">
-  <div>
-    <h2>Weight timeline</h2>
-    <div class="card card-chart">
-      <div class="chart-wrap-sm">
-        <canvas id="weightChart"></canvas>
-      </div>
+  <div class="card card-chart">
+    <div class="chart-header">
+      <span class="chart-title">Weight timeline</span>
+    </div>
+    <div class="chart-wrap-sm">
+      <canvas id="weightChart"></canvas>
     </div>
   </div>
-  <div>
-    <h2>Lab results vs. range</h2>
-    <div class="card card-chart">
-      <div class="chart-wrap-sm">
-        <canvas id="labChart"></canvas>
+  <div class="card card-chart">
+    <div class="chart-header">
+      <span class="chart-title">Lab results vs. reference range</span>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div>Normal</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Out of range</div>
       </div>
+    </div>
+    <div class="chart-wrap-sm">
+      <canvas id="labChart"></canvas>
     </div>
   </div>
 </div>
 
-<!-- Medications + Appointments side by side -->
+<!-- Medications + Appointments -->
 <div class="section grid grid-2">
-  <div>
-    <h2>Active medications</h2>
-    <div class="card">
-      {_medications_html(meds)}
-    </div>
+  <div class="card">
+    <div class="section-label" style="margin-bottom:16px">Active medications</div>
+    {_medications_html(meds)}
   </div>
-  <div>
-    <h2>Upcoming appointments</h2>
-    <div class="card">
-      {_appointments_html(upcoming_appts)}
-    </div>
+  <div class="card">
+    <div class="section-label" style="margin-bottom:16px">Upcoming appointments</div>
+    {_appointments_html(upcoming_appts)}
   </div>
 </div>
 
 <!-- Conditions -->
 {_conditions_html(conditions)}
 
-<footer>Generated by health-skill · Data stays on your device · Not medical advice</footer>
+<footer>
+  <strong>health-skill</strong>
+  <span class="footer-note">⚠️ Not medical advice · For personal awareness only</span>
+</footer>
+
+</div><!-- /page -->
 
 <script>
-const CHART_DEFAULTS = {{
+const C = '#6b7280';   // muted tick color
+const G = '#f3f4f6';   // grid line color
+
+const BASE = {{
   responsive: true,
   maintainAspectRatio: false,
-  plugins: {{ legend: {{ labels: {{ color: '#8892a4', font: {{ size: 11 }} }} }} }},
+  interaction: {{ mode: 'index', intersect: false }},
+  plugins: {{
+    legend: {{ display: false }},
+    tooltip: {{
+      backgroundColor: '#fff',
+      titleColor: '#1a1d2e',
+      bodyColor: '#4b5168',
+      borderColor: '#e4e7f0',
+      borderWidth: 1,
+      padding: 10,
+      cornerRadius: 8,
+    }}
+  }},
   scales: {{
-    x: {{ ticks: {{ color: '#8892a4', maxRotation: 0, maxTicksLimit: 8 }}, grid: {{ color: '#2d3148' }} }},
-    y: {{ ticks: {{ color: '#8892a4' }}, grid: {{ color: '#2d3148' }} }}
+    x: {{ ticks: {{ color: C, maxRotation: 0, maxTicksLimit: 8, font: {{ size: 11 }} }}, grid: {{ color: G }} }},
+    y: {{ ticks: {{ color: C, font: {{ size: 11 }} }}, grid: {{ color: G }} }}
   }}
 }};
 
-// Trends chart
+// Trends
 (function() {{
-  const data = {json.dumps(trend_data)};
-  if (!data.labels.length) return;
+  const d = {json.dumps(trend_data)};
+  if (!d.labels.length) {{ document.getElementById('trendsChart').closest('.card').innerHTML += '<p class="empty" style="margin-top:8px">No check-in data yet.</p>'; return; }}
   new Chart(document.getElementById('trendsChart'), {{
     type: 'line',
     data: {{
-      labels: data.labels,
+      labels: d.labels,
       datasets: [
-        {{ label: 'Mood', data: data.mood, borderColor: '#6c8fef', backgroundColor: 'rgba(108,143,239,.08)', tension: 0.35, pointRadius: 0, borderWidth: 2 }},
-        {{ label: 'Energy', data: data.energy, borderColor: '#5dd6a8', backgroundColor: 'rgba(93,214,168,.06)', tension: 0.35, pointRadius: 0, borderWidth: 2 }},
-        {{ label: 'Sleep (h)', data: data.sleep, borderColor: '#c084fc', backgroundColor: 'rgba(192,132,252,.06)', tension: 0.35, pointRadius: 0, borderWidth: 2, yAxisID: 'y2' }},
-        {{ label: 'Pain', data: data.pain, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,.06)', tension: 0.35, pointRadius: 0, borderWidth: 2 }},
+        {{ label:'Mood',     data:d.mood,   borderColor:'#4f6ef7', backgroundColor:'rgba(79,110,247,.07)', tension:0.4, pointRadius:0, borderWidth:2.5, fill:false }},
+        {{ label:'Energy',   data:d.energy, borderColor:'#0d9488', backgroundColor:'rgba(13,148,136,.07)', tension:0.4, pointRadius:0, borderWidth:2.5, fill:false }},
+        {{ label:'Sleep (h)',data:d.sleep,  borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.05)', tension:0.4, pointRadius:0, borderWidth:2,   fill:false, yAxisID:'y2' }},
+        {{ label:'Pain',     data:d.pain,   borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.05)',  tension:0.4, pointRadius:0, borderWidth:2,   fill:false }},
       ]
     }},
     options: {{
-      ...CHART_DEFAULTS,
+      ...BASE,
       scales: {{
-        x: CHART_DEFAULTS.scales.x,
-        y: {{ ...CHART_DEFAULTS.scales.y, min: 0, max: 10, title: {{ display: true, text: 'Score /10', color: '#8892a4', font: {{ size: 10 }} }} }},
-        y2: {{ ...CHART_DEFAULTS.scales.y, position: 'right', min: 0, max: 12, title: {{ display: true, text: 'Sleep (h)', color: '#8892a4', font: {{ size: 10 }} }}, grid: {{ drawOnChartArea: false }} }}
+        x:  BASE.scales.x,
+        y:  {{ ...BASE.scales.y, min:0, max:10, title:{{ display:true, text:'score /10', color:C, font:{{size:10}} }} }},
+        y2: {{ ...BASE.scales.y, position:'right', min:0, max:12, title:{{ display:true, text:'sleep h', color:C, font:{{size:10}} }}, grid:{{ drawOnChartArea:false }} }}
       }}
     }}
   }});
 }})();
 
-// Weight chart
+// Weight
 (function() {{
-  const data = {json.dumps(weight_data)};
-  if (!data.labels.length) {{ document.getElementById('weightChart').parentElement.innerHTML = '<p class=\"empty\">No weight data yet.</p>'; return; }}
-  new Chart(document.getElementById('weightChart'), {{
-    type: 'line',
-    data: {{
-      labels: data.labels,
-      datasets: [{{ label: 'Weight', data: data.values, borderColor: '#f5a623', backgroundColor: 'rgba(245,166,35,.1)', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: true }}]
-    }},
-    options: {{
-      ...CHART_DEFAULTS,
-      plugins: {{ legend: {{ display: false }} }},
-      scales: {{
-        x: CHART_DEFAULTS.scales.x,
-        y: {{ ...CHART_DEFAULTS.scales.y, title: {{ display: true, text: data.unit || 'kg', color: '#8892a4', font: {{ size: 10 }} }} }}
+  const d = {json.dumps(weight_data)};
+  const el = document.getElementById('weightChart');
+  if (!d.labels.length) {{ el.closest('.card').querySelector('.chart-wrap-sm').innerHTML = '<p class="empty">No weight data yet.</p>'; return; }}
+  new Chart(el, {{
+    type:'line',
+    data:{{ labels:d.labels, datasets:[{{
+      label:'Weight', data:d.values,
+      borderColor:'#d97706', backgroundColor:'rgba(217,119,6,.08)',
+      tension:0.3, pointRadius:0, borderWidth:2.5, fill:true
+    }}]}},
+    options:{{
+      ...BASE,
+      scales:{{
+        x: BASE.scales.x,
+        y: {{ ...BASE.scales.y, title:{{ display:true, text:d.unit||'kg', color:C, font:{{size:10}} }} }}
       }}
     }}
   }});
 }})();
 
-// Lab chart
+// Labs
 (function() {{
-  const data = {json.dumps(lab_chart)};
-  if (!data.labels.length) {{ document.getElementById('labChart').parentElement.innerHTML = '<p class=\"empty\">No lab results yet.</p>'; return; }}
-  new Chart(document.getElementById('labChart'), {{
-    type: 'bar',
-    data: {{
-      labels: data.labels,
-      datasets: [
-        {{ label: 'Your value', data: data.values, backgroundColor: data.colors, borderRadius: 4 }},
-      ]
-    }},
-    options: {{
-      ...CHART_DEFAULTS,
-      indexAxis: 'y',
-      plugins: {{ legend: {{ display: false }}, tooltip: {{ callbacks: {{ afterLabel: (ctx) => data.ranges[ctx.dataIndex] }} }} }},
-      scales: {{
-        x: {{ ...CHART_DEFAULTS.scales.x, title: {{ display: false }} }},
-        y: {{ ...CHART_DEFAULTS.scales.y, ticks: {{ color: '#e2e8f0', font: {{ size: 11 }} }} }}
+  const d = {json.dumps(lab_chart)};
+  const el = document.getElementById('labChart');
+  if (!d.labels.length) {{ el.closest('.card').querySelector('.chart-wrap-sm').innerHTML = '<p class="empty">No lab results yet.</p>'; return; }}
+  new Chart(el, {{
+    type:'bar',
+    data:{{ labels:d.labels, datasets:[{{ label:'Value', data:d.values, backgroundColor:d.colors, borderRadius:5, borderSkipped:false }}] }},
+    options:{{
+      ...BASE,
+      indexAxis:'y',
+      plugins:{{
+        ...BASE.plugins,
+        tooltip:{{
+          ...BASE.plugins.tooltip,
+          callbacks:{{ afterBody: (items) => items.map(i => d.ranges[i.dataIndex]).filter(Boolean) }}
+        }}
+      }},
+      scales:{{
+        x: BASE.scales.x,
+        y: {{ ...BASE.scales.y, ticks:{{ ...BASE.scales.y.ticks, color:'#1a1d2e', font:{{size:12,weight:'500'}} }} }}
       }}
     }}
   }});
@@ -331,10 +471,10 @@ def _lab_chart_data(labs: list[dict[str, Any]], profile: dict[str, Any]) -> dict
         r = personalised_range(marker, profile)
         flag = flag_lab_value(marker, val, profile)
         color_map = {
-            "high": "rgba(248,113,113,0.8)",
-            "low": "rgba(248,113,113,0.8)",
-            "normal": "rgba(93,214,168,0.8)",
-            "optimal": "rgba(108,143,239,0.8)",
+            "high": "rgba(220,38,38,0.75)",
+            "low": "rgba(220,38,38,0.75)",
+            "normal": "rgba(22,163,74,0.7)",
+            "optimal": "rgba(79,110,247,0.75)",
         }
         low = r.get("low")
         high = r.get("high")
@@ -393,20 +533,21 @@ def _medication_timeline(meds: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def _kpi_card(label: str, value: float | None, suffix: str, delta: float | None,
-              color: str, invert: bool = False) -> str:
+              icon: str, color: str, bg: str, invert: bool = False) -> str:
     val_str = str(value) if value is not None else "—"
     delta_html = ""
-    if delta is not None:
-        # For pain, going down is good (invert)
+    if delta is not None and delta != 0:
         is_good = (delta > 0) if not invert else (delta < 0)
-        is_bad = (delta < 0) if not invert else (delta > 0)
-        cls = "delta-up" if is_good else ("delta-down" if is_bad else "delta-flat")
-        arrow = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+        cls = "delta-up" if is_good else "delta-down"
+        arrow = "↑" if delta > 0 else "↓"
         sign = "+" if delta > 0 else ""
         delta_html = f'<div class="kpi-delta {cls}">{arrow} {sign}{delta} vs prev 30d</div>'
+    elif delta == 0:
+        delta_html = '<div class="kpi-delta delta-neutral">→ Unchanged</div>'
     return f"""
     <div class="card">
-      <div class="kpi-value" style="color:{color}">{val_str}<span style="font-size:1rem;font-weight:400;color:#8892a4">{suffix}</span></div>
+      <div class="kpi-icon" style="background:{bg}">{icon}</div>
+      <div class="kpi-value" style="color:{color}">{val_str}<span class="kpi-suffix">{suffix}</span></div>
       <div class="kpi-label">{label}</div>
       {delta_html}
     </div>"""
@@ -417,14 +558,13 @@ def _medications_html(meds: list[dict[str, Any]]) -> str:
     if not active:
         return '<p class="empty">No medications recorded.</p>'
     rows = []
-    today = date.today().isoformat()
-    for m in active:
-        name = m.get("name", "Unknown")
+    colors = ["#4f6ef7", "#0d9488", "#7c3aed", "#d97706", "#dc2626", "#16a34a"]
+    for i, m in enumerate(active):
+        name = m.get("name", "Unknown").title()
         dose = m.get("dose", "")
         freq = m.get("frequency", "")
         start = m.get("start_date", "")
         detail = " · ".join(filter(None, [dose, freq]))
-        # Duration
         dur = ""
         if start:
             try:
@@ -437,13 +577,15 @@ def _medications_html(meds: list[dict[str, Any]]) -> str:
                     dur = f"{days // 30}mo"
             except ValueError:
                 pass
+        dot_color = colors[i % len(colors)]
         rows.append(f"""
-        <div class="med-bar">
-          <div class="med-line" style="width:{min(100, max(8, len(name)*4))}px"></div>
-          <div>
-            <div style="font-weight:600">{name}</div>
-            <div style="color:var(--muted);font-size:0.75rem">{detail}{(' · ' + dur + ' so far') if dur else ''}</div>
+        <div class="row">
+          <div class="med-dot" style="background:{dot_color}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="med-name">{name}</div>
+            {f'<div class="med-detail">{detail}</div>' if detail else ''}
           </div>
+          {f'<div class="med-dur">{dur}</div>' if dur else ''}
         </div>""")
     return "".join(rows)
 
@@ -454,7 +596,7 @@ def _appointments_html(appts: list[dict[str, Any]]) -> str:
     rows = []
     today = date.today()
     for a in appts:
-        spec = a.get("specialty", "Appointment")
+        spec = a.get("specialty", "Appointment").title()
         reason = a.get("reason", "")
         d = a.get("date", "")
         try:
@@ -462,7 +604,7 @@ def _appointments_html(appts: list[dict[str, Any]]) -> str:
             if days_until == 0:
                 badge = '<span class="badge badge-red">Today</span>'
             elif days_until <= 3:
-                badge = f'<span class="badge badge-yellow">In {days_until}d</span>'
+                badge = f'<span class="badge badge-amber">In {days_until}d</span>'
             elif days_until <= 14:
                 badge = f'<span class="badge badge-blue">In {days_until}d</span>'
             else:
@@ -470,10 +612,10 @@ def _appointments_html(appts: list[dict[str, Any]]) -> str:
         except ValueError:
             badge = f'<span class="badge badge-gray">{d}</span>'
         rows.append(f"""
-        <div class="appt-row">
-          <div class="appt-date">{badge}</div>
-          <div>
-            <div class="appt-name">{spec.title()}</div>
+        <div class="row">
+          {badge}
+          <div class="appt-col">
+            <div class="appt-name">{spec}</div>
             {f'<div class="appt-reason">{reason}</div>' if reason else ''}
           </div>
         </div>""")
@@ -483,17 +625,17 @@ def _appointments_html(appts: list[dict[str, Any]]) -> str:
 def _conditions_html(conditions: list[dict[str, Any]]) -> str:
     if not conditions:
         return ""
-    badges = []
+    chips = []
     for c in conditions:
         name = c.get("name", "")
         since = c.get("diagnosed", "")
         tip = f' title="Diagnosed {since}"' if since else ""
-        badges.append(f'<span class="badge badge-blue"{tip}>{name}</span>')
-    badges_html = " ".join(badges)
+        chips.append(f'<span class="chip"{tip}>🔵 {name}</span>')
+    chips_html = "\n".join(chips)
     return f"""
 <div class="section">
-  <h2>Conditions</h2>
-  <div class="card" style="display:flex;flex-wrap:wrap;gap:8px;padding:16px">
-    {badges_html}
+  <div class="section-label">Conditions</div>
+  <div class="card">
+    <div class="chips">{chips_html}</div>
   </div>
 </div>"""

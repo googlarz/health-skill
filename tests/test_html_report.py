@@ -64,7 +64,7 @@ class HTMLReportTests(unittest.TestCase):
 
     def test_html_includes_medication(self):
         html = build_html_report(self.profile)
-        self.assertIn("levothyroxine", html)
+        self.assertIn("Levothyroxine", html)
 
     def test_html_includes_lab_data(self):
         html = build_html_report(self.profile)
