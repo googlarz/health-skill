@@ -94,6 +94,66 @@ def _has_condition(profile: dict[str, Any], cond: str) -> bool:
     return False
 
 
+def family_history_adjustments(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Return per-screening overrides based on family history.
+
+    Convention: 1st-degree relative diagnosis with cancer or cardiac event
+    pulls the screening start age 10 years earlier than affected relative's age,
+    or default early-start age for that screening, whichever is earlier.
+
+    Returns a mapping of screening_name -> {"age_start_override": float, "reason": str}.
+    """
+    fh = profile.get("family_history", []) or []
+    overrides: dict[str, dict[str, Any]] = {}
+    # Affected relatives → screenings to pull forward
+    cancer_to_screening = {
+        "breast cancer":   ("mammogram", 35.0),
+        "ovarian cancer":  ("mammogram", 35.0),  # also signals BRCA — flag mammogram early
+        "colon cancer":    ("colonoscopy", 40.0),
+        "colorectal cancer": ("colonoscopy", 40.0),
+        "prostate cancer": ("prostate_screening", 40.0),
+        "skin cancer":     ("skin_check", 30.0),
+        "melanoma":        ("skin_check", 30.0),
+        "cervical cancer": ("cervical_cancer", 18.0),
+    }
+    cardiac_terms = ("heart attack", "myocardial infarction", "stroke", "early cardiac death")
+
+    for entry in fh:
+        cond = str(entry.get("condition", "")).strip().lower()
+        try:
+            relative_age = float(entry.get("age_at_diagnosis") or 0)
+        except (TypeError, ValueError):
+            relative_age = 0.0
+        relation = str(entry.get("relation", "")).strip().lower()
+        # Only first-degree relatives count for early-screening adjustment
+        if relation not in ("mother", "father", "brother", "sister", "son", "daughter", "parent", "sibling"):
+            continue
+
+        for term, (screening, default_early) in cancer_to_screening.items():
+            if term in cond:
+                if relative_age and relative_age > 10:
+                    new_start = max(relative_age - 10, default_early)
+                else:
+                    new_start = default_early
+                existing = overrides.get(screening, {}).get("age_start_override", 999)
+                if new_start < existing:
+                    overrides[screening] = {
+                        "age_start_override": new_start,
+                        "reason": f"Family history: {entry.get('relation','relative')} with {cond}"
+                                  + (f" at age {int(relative_age)}" if relative_age else ""),
+                    }
+
+        if any(t in cond for t in cardiac_terms):
+            if relative_age and relative_age < 55:
+                # Pull lipid panel earlier
+                overrides.setdefault("lipid_panel", {
+                    "age_start_override": 25.0,
+                    "reason": f"Family history: {entry.get('relation','relative')} early cardiac event at {int(relative_age)}",
+                })
+
+    return overrides
+
+
 def compute_due_screenings(profile: dict[str, Any]) -> list[dict[str, Any]]:
     """Return a list of screening statuses for this profile.
 
@@ -104,6 +164,7 @@ def compute_due_screenings(profile: dict[str, Any]) -> list[dict[str, Any]]:
     sex = profile.get("sex", "")
     age = calculate_age_from_dob(dob) if dob else 0
     today = date.today()
+    fh_overrides = family_history_adjustments(profile)
 
     existing: dict[str, dict[str, Any]] = {}
     for s in profile.get("screenings", []):
@@ -117,6 +178,9 @@ def compute_due_screenings(profile: dict[str, Any]) -> list[dict[str, Any]]:
         freq = float(spec["frequency_years"])
         age_start = float(spec["age_start"])
         age_end = float(spec["age_end"])
+        fh_override = fh_overrides.get(name)
+        if fh_override:
+            age_start = min(age_start, float(fh_override["age_start_override"]))
         required_sex = spec.get("sex", "any")
         condition = spec.get("condition")
 
@@ -159,6 +223,8 @@ def compute_due_screenings(profile: dict[str, Any]) -> list[dict[str, Any]]:
                     status = "up_to_date"
                     reason = f"Last: {last_date.isoformat()}. Next due {next_due_str}."
 
+        if fh_override and reason:
+            reason = reason + " · " + fh_override["reason"]
         results.append({
             "name": name,
             "status": status,

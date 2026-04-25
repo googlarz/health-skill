@@ -304,6 +304,26 @@ def connections_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "CONNECTIONS.md"
 
 
+def nudges_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "NUDGES.md"
+
+
+def recap_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "WEEKLY_RECAP.md"
+
+
+def goals_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "GOALS.md"
+
+
+def providers_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "PROVIDERS.md"
+
+
+def triage_path(root: Path, person_id: str, slug: str) -> Path:
+    return person_dir(root, person_id) / "notes" / f"{date.today().isoformat()}-triage-{slug}.md"
+
+
 def extraction_accuracy_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "EXTRACTION_ACCURACY.md"
 

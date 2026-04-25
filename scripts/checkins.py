@@ -74,6 +74,36 @@ def parse_checkin(text: str) -> dict[str, Any]:
     consumed_spans: list[tuple[int, int]] = []
     result: dict[str, Any] = {}
 
+    # Shorthand: ":7" (mood), "s7" or "s7.5" (sleep hours), "e7" (energy),
+    # "p3" (pain), "w72" (weight kg). Allows quickest possible logging.
+
+    # ":N" mood shortcut anywhere in the input
+    m_colon = re.search(r"(?:^|\s):(\d+(?:\.\d+)?)\b", t)
+    if m_colon:
+        v = float(m_colon.group(1))
+        if 0 <= v <= 10 and "mood" not in result:
+            result["mood"] = int(v) if v.is_integer() else v
+            consumed_spans.append((m_colon.start(), m_colon.end()))
+
+    for m in re.finditer(r"(?:^|\s)([msepw])(\d+(?:\.\d+)?)(?=\s|$|[,;])", t):
+        prefix = m.group(1)
+        val = float(m.group(2))
+        if prefix == "m" and 0 <= val <= 10 and "mood" not in result:
+            result["mood"] = int(val) if val.is_integer() else val
+            consumed_spans.append((m.start(), m.end()))
+        elif prefix == "s" and 0 <= val <= 14 and "sleep_hours" not in result:
+            result["sleep_hours"] = val
+            consumed_spans.append((m.start(), m.end()))
+        elif prefix == "e" and 0 <= val <= 10 and "energy" not in result:
+            result["energy"] = int(val) if val.is_integer() else val
+            consumed_spans.append((m.start(), m.end()))
+        elif prefix == "p" and 0 <= val <= 10 and "pain_severity" not in result:
+            result["pain_severity"] = int(val) if val.is_integer() else val
+            consumed_spans.append((m.start(), m.end()))
+        elif prefix == "w" and 30 <= val <= 300 and "weight_kg" not in result:
+            result["weight_kg"] = val
+            consumed_spans.append((m.start(), m.end()))
+
     def consume(m: re.Match) -> None:
         consumed_spans.append((m.start(), m.end()))
 

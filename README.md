@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-110%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-129%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-1.7-purple" alt="v1.7">
+    <img src="https://img.shields.io/badge/version-1.8-purple" alt="v1.8">
   </p>
 </p>
 
@@ -119,12 +119,20 @@ Always read HEALTH_DOSSIER.md before answering health questions.
 | See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
 | Prepare for an appointment | `query-dashboard --root . --query "visit prep"` |
 | Ask a health question | `query-dashboard --root . --query "your question"` |
-| Log a daily check-in | `daily-checkin --root . --note "mood 8, slept 7h, energy good"` |
+| Log a daily check-in (full) | `daily-checkin --root . --note "mood 8, slept 7h, energy good"` |
+| Log a daily check-in (shorthand) | `daily-checkin --root . --note "m8 s7 e7 p2"` |
 | Log a workout | `workout-log --root . --type strength --duration 45 --notes "squats, deadlifts"` |
 | Generate a training plan | `workout-plan --root . --goals "build strength" --days 3` |
 | Log a screening | `screening-log --root . --name mammogram --date 2024-06-01` |
 | See overdue screenings | `preventive-check --root .` |
 | Discover cross-domain patterns | `connections --root .` |
+| **Get proactive nudges** | `nudges --root .` |
+| **Generate weekly recap** | `weekly-recap --root .` |
+| **Set a longevity goal** | `add-goal --root . --title "LDL under 130" --metric ldl --target 130` |
+| **Show goals & progress** | `goals --root .` |
+| **Add a care-team provider** | `add-provider --root . --name "Dr Smith" --role pcp` |
+| **Import wearable data** | `import-wearable --root . --file inbox/export.xml` |
+| **Run structured triage** | `triage --root . --summary "knee pain" --q1 "..." --q2 "..."` |
 | Check extraction accuracy | `extraction-audit --root .` |
 
 See [docs/commands.md](docs/commands.md) for the full reference.
@@ -159,6 +167,21 @@ See [docs/files.md](docs/files.md) for the complete list.
 **Visual outputs** — Status chips (✅/⚠️), sparkline charts, trend arrows, and bold key numbers. Designed for scanning when tired or stressed.
 
 **Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
+
+## What's new in v1.8
+
+- **📸 Photo input** — paste a posture photo, skin lesion, medication bottle, lab screenshot, or food photo. See [`references/photo-handling.md`](references/photo-handling.md) for the full protocol.
+- **🔔 Proactive nudges** — `nudges` scans the workspace for overdue items, stale labs, missed check-ins, open conflicts, and surfaces what to act on next.
+- **📅 Weekly recap** — `weekly-recap` summarises your last 7 days: mood/sleep/energy/pain trends, training volume, weight delta, and one thing to action.
+- **🎯 Goal tracking** — set quantified goals (LDL <130, deadlift 60kg, sleep 7+h) with `add-goal`. Baseline captured automatically; progress computed from your actual data.
+- **⌚ Wearable import** — drop Apple Health `export.xml` or any CSV in `inbox/`, run `import-wearable`. Imports steps, RHR, VO2 max, SpO2, weight, BP, sleep.
+- **👪 Family-history-aware screening** — adding "Mom: breast cancer at 48" pulls your mammogram start age forward to 38 automatically.
+- **🩺 Provider directory** — store your care team (PCP, gyno, cardio, PT, dentist) with `add-provider`.
+- **🧭 Structured triage** — describe a symptom, get walked through 5 questions, returns urgency band + red-flag detection + drafted clinician handoff.
+- **⚡ Shorthand check-ins** — `m7 s7 e6 p2` works as well as a sentence. Lower friction = more data.
+- **💡 Smart in-conversation suggestions** — Claude offers concrete next steps when you mention symptoms, sleep, new meds, family history, or goals.
+
+---
 
 ## Longevity Companion (v1.7)
 

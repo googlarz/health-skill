@@ -453,14 +453,106 @@ For every session (not just first):
 
 When user asks "what can you do", offer:
 - Training plan generation (goals + constraints → personalized plan)
-- Daily check-in logging
+- Daily check-in logging (full sentence or shorthand `m7 s7.5 e6 p2`)
 - Cycle tracking (opt-in)
-- Preventive care tracking (screenings due)
+- Preventive care tracking (screenings due, family-history-aware)
 - Lab review with cross-domain context
 - Medication safety checks
 - Visit prep with portal messages
 - Connection insights across all data
 - Menopause and hormonal health support (HRT context, symptom tracking, bone-protective exercise)
+- Photo analysis (posture, skin, medication bottles, lab screenshots, food)
+- Wearable data import (Apple Health export, generic CSV)
+- Goal setting and progress tracking
+- Provider directory (your care team)
+- Structured symptom triage with red-flag detection
+- Proactive nudges and weekly recaps
+
+### Photo Handling
+
+Load [references/photo-handling.md](references/photo-handling.md) when the user pastes any photo. Always:
+1. Identify the photo type (posture, skin, medication, lab screenshot, food, progress)
+2. Follow the matching protocol in that reference
+3. Save the original to `Archive/{date}-{type}-photo.{ext}`
+4. Produce a structured note in `notes/`
+5. Never claim the photo is diagnostic
+
+### Smart in-conversation suggestions
+
+When the user mentions something casually, offer to act on it. Don't ask for permission — offer one specific next step.
+
+| User says | Offer |
+|---|---|
+| "knee hurts again" / "back is sore" | Log it as a check-in (`p3`), check related meds, draft a PT/PCP question |
+| "slept terribly" / "couldn't sleep" | Log sleep hours, look at sleep trend, check connection to mood |
+| "starting [medication]" | Add to medications, allergy conflict check, build a what-to-watch checklist |
+| "had labs done" | Drop the PDF/photo and run process-inbox |
+| "appointment on [date]" | Generate visit-prep with NEXT_APPOINTMENT.md |
+| "my mom had [condition]" | Add to family history → triggers preventive screening adjustment |
+| "feeling tired all the time" | Run triage with structured questions |
+| "want to lose weight" / "build strength" | Offer to set a goal and generate a training plan |
+| "haven't been to the doctor in years" | Run preventive-check, surface what's overdue |
+
+### Proactive layer
+
+At session start (or when user says "what's up"), run `nudges` to surface:
+- Overdue follow-ups
+- Stale labs (>12 months on key markers)
+- Open conflicts and review items
+- Long gaps in check-ins
+
+For weekly review, run `weekly-recap` — gives mood/sleep/energy/pain trends, training summary, weight delta, and one specific thing to action.
+
+### Goals
+
+When user expresses a desired outcome (LDL under 130, deadlift 60kg, regular periods, sleep 7+h), offer to formalise it:
+
+```bash
+scripts/care_workspace.py add-goal --root . \
+  --title "LDL under 130" --metric ldl --target 130 --unit mg/dL --direction down
+```
+
+Recognised metrics: `weight_kg, ldl, hdl, a1c, tsh, total_cholesterol, workouts_per_week, sleep_avg, mood_avg, rhr, steps_per_day`.
+
+The system captures baseline at goal creation and computes progress automatically.
+
+### Wearable import
+
+When user mentions Apple Watch, Oura, Whoop, Garmin, or any wearable:
+1. Ask them to export the data (Apple Health → export.zip → export.xml)
+2. Drop into `inbox/`
+3. Run `import-wearable --file inbox/export.xml`
+
+Imports steps, heart rate, RHR, VO2 max, SpO2, weight, blood pressure, and sleep hours into the workspace. Sleep hours auto-create check-in entries.
+
+### Family history → preventive
+
+Family history entries (in `profile.family_history`) automatically pull screening start ages forward:
+- Mother/sister with breast cancer at 45 → mammogram pulled to 35 (or 10y before relative's age, whichever is earlier)
+- Father with colon cancer at 50 → colonoscopy pulled to 40
+- 1st-degree relative with cardiac event before 55 → lipid panel from age 25
+
+The reason appears in `PREVENTIVE_CARE.md` so the user knows why the dates shifted.
+
+### Provider directory
+
+When user mentions any clinician by name and role, offer to add them to `PROVIDERS.md`. Recognised roles: `pcp, gyn, ob, cardio, endo, derm, ortho, neuro, psych, therapist, pt, dentist, optom, ophth, rheum, gi, onco, uro, ent`.
+
+### Structured triage
+
+When user describes a symptom in detail, walk them through the 5 questions in `scripts/triage.py`:
+1. What and where
+2. When started, getting better/worse
+3. Severity 1–10, constant or intermittent
+4. Modifiers (better/worse with what)
+5. Associated symptoms
+
+Triage produces:
+- Urgency band (Emergency / Urgent / Routine / Education only)
+- Red flag detection (cardiac, stroke, anaphylaxis, severe headache, postmenopausal bleeding, DVT, suicidal ideation)
+- Drafted clinician handoff text
+
+Always end with "Health Skill is not a clinician. This is structured triage, not diagnosis."
 
 ### Menopause and Hormonal Health
 

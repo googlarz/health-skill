@@ -79,6 +79,12 @@ try:
     from .onboarding import command_onboard
     from .preventive import log_screening, write_preventive_care
     from .connections import build_connections, render_connections_text
+    from .nudges import write_nudges
+    from .recap import write_recap
+    from .goals import add_goal as goals_add, write_goals
+    from .providers import add_provider as providers_add, write_providers
+    from .wearable_import import import_wearable_file
+    from .triage import write_triage
     from .care_workspace import connections_path
     from .rendering import (
         build_timeline_events,
@@ -178,6 +184,12 @@ except ImportError:
     from onboarding import command_onboard
     from preventive import log_screening, write_preventive_care
     from connections import build_connections, render_connections_text
+    from nudges import write_nudges
+    from recap import write_recap
+    from goals import add_goal as goals_add, write_goals
+    from providers import add_provider as providers_add, write_providers
+    from wearable_import import import_wearable_file
+    from triage import write_triage
     from care_workspace import connections_path
     from rendering import (
         build_timeline_events,
@@ -1473,6 +1485,70 @@ def build_parser() -> argparse.ArgumentParser:
     connections_parser.add_argument("--person-id", default="")
     connections_parser.set_defaults(func=_command_connections)
 
+    # v1.8: nudges, recap, goals, providers, wearables, triage
+    nudges_parser = subparsers.add_parser("nudges", help="Generate proactive nudges (NUDGES.md)")
+    nudges_parser.add_argument("--root", required=True)
+    nudges_parser.add_argument("--person-id", default="")
+    nudges_parser.set_defaults(func=_command_nudges)
+
+    recap_parser = subparsers.add_parser("weekly-recap", help="Generate weekly recap (WEEKLY_RECAP.md)")
+    recap_parser.add_argument("--root", required=True)
+    recap_parser.add_argument("--person-id", default="")
+    recap_parser.add_argument("--days", type=int, default=7)
+    recap_parser.set_defaults(func=_command_recap)
+
+    add_goal_parser = subparsers.add_parser("add-goal", help="Add a longevity goal")
+    add_goal_parser.add_argument("--root", required=True)
+    add_goal_parser.add_argument("--person-id", default="")
+    add_goal_parser.add_argument("--title", required=True)
+    add_goal_parser.add_argument("--metric", required=True,
+                                  help="weight_kg, ldl, hdl, a1c, tsh, total_cholesterol, workouts_per_week, sleep_avg, mood_avg, rhr, steps_per_day")
+    add_goal_parser.add_argument("--target", type=float, required=True)
+    add_goal_parser.add_argument("--unit", default="")
+    add_goal_parser.add_argument("--target-date", default="")
+    add_goal_parser.add_argument("--direction", choices=["up", "down"], default="down")
+    add_goal_parser.set_defaults(func=_command_add_goal)
+
+    goals_parser = subparsers.add_parser("goals", help="Render GOALS.md with progress")
+    goals_parser.add_argument("--root", required=True)
+    goals_parser.add_argument("--person-id", default="")
+    goals_parser.set_defaults(func=_command_goals)
+
+    add_provider_parser = subparsers.add_parser("add-provider", help="Add a care-team provider")
+    add_provider_parser.add_argument("--root", required=True)
+    add_provider_parser.add_argument("--person-id", default="")
+    add_provider_parser.add_argument("--name", required=True)
+    add_provider_parser.add_argument("--role", required=True, help="pcp, gyn, cardio, derm, ortho, pt, dentist, ...")
+    add_provider_parser.add_argument("--organization", default="")
+    add_provider_parser.add_argument("--phone", default="")
+    add_provider_parser.add_argument("--portal-url", default="")
+    add_provider_parser.add_argument("--last-visit", default="")
+    add_provider_parser.add_argument("--next-visit", default="")
+    add_provider_parser.add_argument("--notes", default="")
+    add_provider_parser.set_defaults(func=_command_add_provider)
+
+    providers_list_parser = subparsers.add_parser("providers", help="Render PROVIDERS.md")
+    providers_list_parser.add_argument("--root", required=True)
+    providers_list_parser.add_argument("--person-id", default="")
+    providers_list_parser.set_defaults(func=_command_providers)
+
+    wearable_parser = subparsers.add_parser("import-wearable", help="Import Apple Health XML / generic CSV")
+    wearable_parser.add_argument("--root", required=True)
+    wearable_parser.add_argument("--person-id", default="")
+    wearable_parser.add_argument("--file", required=True, help="Path to export.xml or .csv")
+    wearable_parser.set_defaults(func=_command_import_wearable)
+
+    triage_parser = subparsers.add_parser("triage", help="Run structured symptom triage")
+    triage_parser.add_argument("--root", required=True)
+    triage_parser.add_argument("--person-id", default="")
+    triage_parser.add_argument("--summary", required=True, help="One-line symptom summary")
+    triage_parser.add_argument("--q1", default="")
+    triage_parser.add_argument("--q2", default="")
+    triage_parser.add_argument("--q3", default="")
+    triage_parser.add_argument("--q4", default="")
+    triage_parser.add_argument("--q5", default="")
+    triage_parser.set_defaults(func=_command_triage)
+
     return parser
 
 
@@ -1509,6 +1585,96 @@ def _command_connections(args: argparse.Namespace) -> int:
     text = render_connections_text(profile, insights)
     path = connections_path(root, args.person_id)
     atomic_write_text(path, text)
+    print(path)
+    return 0
+
+
+def _command_nudges(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_nudges(root, args.person_id)
+    print(path)
+    return 0
+
+
+def _command_recap(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_recap(root, args.person_id, days=args.days)
+    print(path)
+    return 0
+
+
+def _command_add_goal(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    goal = goals_add(
+        root, args.person_id,
+        title=args.title,
+        metric=args.metric,
+        target=args.target,
+        unit=args.unit,
+        target_date=args.target_date,
+        direction=args.direction,
+    )
+    write_goals(root, args.person_id)
+    print(f"Added goal {goal['id']}: {goal['title']}")
+    return 0
+
+
+def _command_goals(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_goals(root, args.person_id)
+    print(path)
+    return 0
+
+
+def _command_add_provider(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    prov = providers_add(
+        root, args.person_id,
+        name=args.name,
+        role=args.role,
+        organization=args.organization,
+        phone=args.phone,
+        portal_url=args.portal_url,
+        last_visit=args.last_visit,
+        next_visit=args.next_visit,
+        notes=args.notes,
+    )
+    write_providers(root, args.person_id)
+    print(f"Added provider {prov['id']}: {prov['name']} ({prov['role']})")
+    return 0
+
+
+def _command_providers(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_providers(root, args.person_id)
+    print(path)
+    return 0
+
+
+def _command_import_wearable(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    counts = import_wearable_file(root, args.person_id, Path(args.file))
+    if not counts:
+        print("No supported records found.")
+        return 0
+    print("Imported:")
+    for k, v in counts.items():
+        print(f"  - {k}: {v}")
+    return 0
+
+
+def _command_triage(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    answers = {"q1": args.q1, "q2": args.q2, "q3": args.q3, "q4": args.q4, "q5": args.q5}
+    path = write_triage(root, args.person_id, args.summary, answers)
     print(path)
     return 0
 
