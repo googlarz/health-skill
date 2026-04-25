@@ -91,6 +91,12 @@ try:
     from .decisions import write_hrt_decision, write_statin_decision, write_screening_decision
     from .wearable_sync import sync_wearable_inbox
     from .wearable_watch import install_launchd_watcher, uninstall_launchd_watcher, watcher_status
+    from .interactions import render_interactions_text
+    from .side_effects import render_side_effects_text
+    from .monthly_report import write_monthly_report
+    from .fhir_import import import_fhir_file
+    from .mental_health import write_mental_health_report
+    from .lab_ranges import render_range_context, personalised_range, flag_lab_value
     from .household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -208,6 +214,12 @@ except ImportError:
     from decisions import write_hrt_decision, write_statin_decision, write_screening_decision
     from wearable_sync import sync_wearable_inbox  # type: ignore
     from wearable_watch import install_launchd_watcher, uninstall_launchd_watcher, watcher_status  # type: ignore
+    from interactions import render_interactions_text  # type: ignore
+    from side_effects import render_side_effects_text  # type: ignore
+    from monthly_report import write_monthly_report  # type: ignore
+    from fhir_import import import_fhir_file  # type: ignore
+    from mental_health import write_mental_health_report  # type: ignore
+    from lab_ranges import render_range_context, personalised_range, flag_lab_value  # type: ignore
     from household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -1646,6 +1658,47 @@ def build_parser() -> argparse.ArgumentParser:
     hh_dash_parser.add_argument("--root", required=True)
     hh_dash_parser.set_defaults(func=_command_hh_dashboard)
 
+    # ── v2.2 commands ────────────────────────────────────────────────────────
+    interactions_parser = subparsers.add_parser(
+        "check-interactions", help="Check for drug-drug and drug-condition interactions")
+    interactions_parser.add_argument("--root", required=True)
+    interactions_parser.add_argument("--person-id", default="")
+    interactions_parser.set_defaults(func=_command_check_interactions)
+
+    se_parser = subparsers.add_parser(
+        "side-effects", help="Analyse medication side-effect signals in check-in data")
+    se_parser.add_argument("--root", required=True)
+    se_parser.add_argument("--person-id", default="")
+    se_parser.set_defaults(func=_command_side_effects)
+
+    mr_parser = subparsers.add_parser(
+        "monthly-report", help="Generate 30-day insight report")
+    mr_parser.add_argument("--root", required=True)
+    mr_parser.add_argument("--person-id", default="")
+    mr_parser.set_defaults(func=_command_monthly_report)
+
+    fhir_parser = subparsers.add_parser(
+        "import-fhir", help="Import a FHIR R4 JSON file from a patient portal")
+    fhir_parser.add_argument("--root", required=True)
+    fhir_parser.add_argument("--person-id", default="")
+    fhir_parser.add_argument("--file", required=True, help="Path to FHIR JSON file")
+    fhir_parser.set_defaults(func=_command_import_fhir)
+
+    mh_parser = subparsers.add_parser(
+        "mental-health", help="PHQ-2/GAD-2 screen and burnout detection from check-in data")
+    mh_parser.add_argument("--root", required=True)
+    mh_parser.add_argument("--person-id", default="")
+    mh_parser.set_defaults(func=_command_mental_health)
+
+    lr_parser = subparsers.add_parser(
+        "lab-range", help="Show personalised reference range for a lab marker")
+    lr_parser.add_argument("--root", required=True)
+    lr_parser.add_argument("--person-id", default="")
+    lr_parser.add_argument("--marker", required=True, help="Lab marker name, e.g. LDL")
+    lr_parser.add_argument("--value", type=float, default=None,
+                           help="Optional: value to flag against range")
+    lr_parser.set_defaults(func=_command_lab_range)
+
     return parser
 
 
@@ -1884,6 +1937,78 @@ def _command_hh_cascade(args: argparse.Namespace) -> int:
 def _command_hh_dashboard(args: argparse.Namespace) -> int:
     root = Path(args.root)
     print(write_household_dashboard(root))
+    return 0
+
+
+def _command_check_interactions(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    text = render_interactions_text(profile)
+    out_path = Path(root) / (args.person_id or "") / "INTERACTIONS.md"
+    atomic_write_text(out_path, text)
+    print(text)
+    return 0
+
+
+def _command_side_effects(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    text = render_side_effects_text(profile)
+    out_path = Path(root) / (args.person_id or "") / "SIDE_EFFECTS.md"
+    atomic_write_text(out_path, text)
+    print(text)
+    return 0
+
+
+def _command_monthly_report(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_monthly_report(root, args.person_id)
+    print(f"Monthly report written: {path}")
+    return 0
+
+
+def _command_import_fhir(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    fhir_path = Path(args.file)
+    counts = import_fhir_file(root, args.person_id, fhir_path)
+    print("FHIR import complete:")
+    for k, v in counts.items():
+        print(f"  - {k}: {v}")
+    return 0
+
+
+def _command_mental_health(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    path = write_mental_health_report(root, args.person_id)
+    print(f"Mental health report written: {path}")
+    return 0
+
+
+def _command_lab_range(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    profile = load_profile(root, args.person_id)
+    r = personalised_range(args.marker, profile)
+    low = r.get("low")
+    high = r.get("high")
+    unit = r.get("unit", "")
+    if high and high >= 999:
+        range_str = f">{low} {unit}".strip()
+    elif low is not None and high is not None:
+        range_str = f"{low}–{high} {unit}".strip()
+    else:
+        range_str = "unknown"
+    print(f"{args.marker}: {range_str}")
+    for note in r.get("notes", []):
+        print(f"  ↳ {note}")
+    if args.value is not None:
+        flag = flag_lab_value(args.marker, args.value, profile)
+        print(f"  Value {args.value}: {flag.upper()}")
     return 0
 
 

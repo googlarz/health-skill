@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-152%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-192%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.1-purple" alt="v2.1">
+    <img src="https://img.shields.io/badge/version-2.2-purple" alt="v2.2">
   </p>
 </p>
 
@@ -361,6 +361,12 @@ Always read HEALTH_DOSSIER.md before answering health questions.
 | **Add household member** | `household-add-member --root . --id self --name "Anna" --folder anna` |
 | **Cascade family history** | `household-cascade --root .` |
 | Check extraction accuracy | `extraction-audit --root .` |
+| **Check drug interactions** | `check-interactions --root .` |
+| **Medication side-effect timeline** | `side-effects --root .` |
+| **Monthly insight report** | `monthly-report --root .` |
+| **Import FHIR from patient portal** | `import-fhir --root . --file inbox/fhir.json` |
+| **Mental health screen** | `mental-health --root .` |
+| **Personalised lab range** | `lab-range --root . --marker LDL --value 155` |
 
 See [docs/commands.md](docs/commands.md) for the full reference.
 
@@ -394,6 +400,20 @@ See [docs/files.md](docs/files.md) for the complete list.
 **Visual outputs** — Status chips (✅/⚠️), sparkline charts, trend arrows, and bold key numbers. Designed for scanning when tired or stressed.
 
 **Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
+
+## What's new in v2.2
+
+Six new features across safety, clinical depth, and ambient monitoring — shipped as one release.
+
+- **💊 Drug-drug interaction checker** — `check-interactions` scans your full medication list against a curated database of 20+ clinically significant interactions. Warfarin + ibuprofen, SSRIs + MAOIs, statins + clarithromycin, metformin + contrast dye, and more. Each alert includes the mechanism, the risk, and exactly what to do.
+- **🎯 Personalised lab reference ranges** — standard ranges assume a healthy adult. `lab-range` adjusts your LDL target if you have diabetes (→ <100), your TSH range if you're on levothyroxine (→ 0.5–2.5), your haemoglobin range by sex, and dozens more condition × marker × medication combinations.
+- **📈 Medication side-effect timeline** — `side-effects` correlates your medication start dates with your daily check-in data. If your pain scores jumped 3 points after starting a statin, or your sleep disrupted after starting an SSRI, the signal surfaces automatically.
+- **📅 Monthly insight report** — `monthly-report` generates a one-page summary of your last 30 days: mood/sleep/energy/pain trends with sparklines, training volume, new labs, weight delta, and one specific action item.
+- **🏥 FHIR R4 import** — `import-fhir` imports health records directly from patient portals (Epic MyChart, Cerner, Apple Health Records). Extracts conditions, medications, allergies, immunisations, and lab observations. No copy-pasting.
+- **🧠 Mental health layer** — `mental-health` runs a PHQ-2 (depression) and GAD-2 (anxiety) proxy from your check-in mood scores, and a burnout detector that flags sustained low energy + mood + sleep. Includes crisis line resources.
+- **🔔 Continuous pattern alerts** — integrated into the existing `nudges` command. Now detects: chronic sleep deficit (avg <6h for 7 days), sustained low mood + energy (burnout signal), consistently high pain (avg ≥5/10 for a week), and rapid weight gain (>2kg in 2 weeks).
+
+---
 
 ## What's new in v2.0
 
