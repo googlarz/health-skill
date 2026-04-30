@@ -7,7 +7,7 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
     <img src="https://img.shields.io/badge/tests-237%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.2-purple" alt="v2.2">
+    <img src="https://img.shields.io/badge/version-1.8-purple" alt="v1.8">
   </p>
 </p>
 
@@ -27,6 +27,7 @@ It's also a **daily longevity companion**: log check-ins, track your cycle, desi
 - [What You Get](#what-you-get)
 - [Key Features](#key-features)
 - [Longevity Companion (v1.7)](#longevity-companion-v17)
+- [What's new in v1.8](#whats-new-in-v18)
 - [Who This Is For](#who-this-is-for)
 - [What It Is Not](#what-it-is-not)
 - [Documentation](#documentation)
@@ -401,9 +402,9 @@ See [docs/files.md](docs/files.md) for the complete list.
 
 **Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
 
-## What's new in v2.2
+## What's new in v1.8
 
-Thirteen new features across safety, clinical depth, ambient monitoring, and equal coverage for men and women — shipped as one release.
+Thirteen new features across safety, clinical depth, ambient monitoring, equal coverage for men and women, and an interactive HTML dashboard.
 
 **Core safety & insights**
 - **💊 Drug-drug interaction checker** — `check-interactions` scans your full medication list against 20+ clinically significant interactions. Warfarin + ibuprofen, SSRIs + MAOIs, statins + clarithromycin, metformin + contrast dye, and more. Each alert includes mechanism, risk, and exactly what to do.
@@ -442,7 +443,7 @@ The skill is no longer a filing cabinet — it predicts, recommends actions, sup
 
 ---
 
-## What's new in v1.8
+**Previous features (also in v1.8)**
 
 - **📸 Photo input** — paste a posture photo, skin lesion, medication bottle, lab screenshot, or food photo. See [`references/photo-handling.md`](references/photo-handling.md) for the full protocol.
 - **🔔 Proactive nudges** — `nudges` scans the workspace for overdue items, stale labs, missed check-ins, open conflicts, and surfaces what to act on next.
