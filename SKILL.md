@@ -596,6 +596,7 @@ When the user mentions something casually, offer to act on it. Don't ask for per
 | User says | Offer |
 |---|---|
 | "knee hurts again" / "back is sore" | Log it as a check-in (`p3`), check related meds, draft a PT/PCP question |
+| "feel sick" / "not feeling well" / vague symptom | Save what's there, then **ask follow-up**: how long, severity 1–10, any fever/nausea/other symptoms, anything that might have triggered it |
 | "slept terribly" / "couldn't sleep" | Log sleep hours, look at sleep trend, check connection to mood |
 | "starting [medication]" | Add to medications, allergy conflict check, build a what-to-watch checklist |
 | "had labs done" | Drop the PDF/photo and run process-inbox |
