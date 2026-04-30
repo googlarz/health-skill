@@ -574,11 +574,20 @@ Use cases:
 ### Photo Handling
 
 Load [references/photo-handling.md](references/photo-handling.md) when the user pastes any photo. Always:
-1. Identify the photo type (posture, skin, medication, lab screenshot, food, progress)
+1. Identify the photo type (posture, skin, medication, lab screenshot, workout app, food, progress)
 2. Follow the matching protocol in that reference
 3. Save the original to `Archive/{date}-{type}-photo.{ext}`
 4. Produce a structured note in `notes/`
 5. Never claim the photo is diagnostic
+
+**Auto-save rule — no exceptions:** whenever you extract structured health data from any photo or image, you MUST immediately save it to the workspace using the appropriate command, using the **date from the image** (not today's date). Never ask permission first — save, then confirm what was saved. This applies to:
+- Workout app screenshots → `log_workout` with the workout's actual date
+- Lab result photos → `upsert_record` for each value with the lab date
+- Medication labels → review queue entry with today's date
+- Food photos → `log_meal` with today's date
+- Weight scale photos → `upsert_record` weight_entry with today's date
+
+All saved entries must include an explicit ISO date (`YYYY-MM-DD`) for timeline integrity.
 
 ### Smart in-conversation suggestions
 

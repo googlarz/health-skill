@@ -57,16 +57,37 @@ Then:
 3. Add to review queue at `needs_quick_confirmation` tier
 4. Save to `notes/{date}-medication-{name}.md`
 
-### 4. Lab report screenshot or photo of paper labs
+### 4. Workout app screenshot (Suunto, Garmin, Apple Watch, Strava, etc.)
+
+**Goal:** extract every visible metric and save a structured workout entry with today's date.
+
+Extract all visible fields:
+- Activity type (run, ride, swim, strength, etc.)
+- Date and time (use the date shown in the screenshot, not today's date)
+- Duration
+- Distance and unit (km / miles)
+- Pace (min/km or min/mile)
+- Average and max HR
+- Calories
+- Elevation gain/loss
+- Any sport-specific metrics (cadence, power, stroke rate, etc.)
+
+Then immediately:
+1. Call `scripts/care_workspace.py log-workout --root . --type <type> --date <YYYY-MM-DD> --duration-min <n> --distance-km <n> --notes "<all metrics as JSON>"` — or use `log_workout` directly
+2. Save a note to `notes/{date}-workout-{type}.md` with the full metric breakdown
+3. Never ask permission — save first, confirm after
+
+### 5. Lab report screenshot or photo of paper labs
 
 **Goal:** OCR the values, route through the standard extraction pipeline.
 
-1. Read every visible test name, value, unit, reference range, and flag
+1. Read every visible test name, value, unit, reference range, and flag — use the **lab date from the photo**, not today's date
 2. Save raw text to `inbox/{date}-lab-photo.txt` so `process_inbox` can ingest
 3. Mark provenance as `photo_extraction` (lower trust than digital PDF)
 4. All extracted labs go to `HEALTH_REVIEW_QUEUE.json` for confirmation, never auto-apply
+5. For any clearly legible values, also call `upsert_record` directly with `source_type="photo_extraction"` so they appear in the timeline immediately
 
-### 5. Food photo
+### 6. Food photo
 
 **Goal:** rough macro estimate to support training/longevity goals. Not a precise tracker.
 
@@ -79,7 +100,7 @@ Provide:
 
 Do not provide false precision. If the photo is ambiguous, ask.
 
-### 6. Progress / body composition photo
+### 7. Progress / body composition photo
 
 **Goal:** longitudinal comparison, not body-image judgement.
 
