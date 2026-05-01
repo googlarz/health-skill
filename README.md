@@ -309,6 +309,28 @@ In the Health app on iPhone, go to **Sharing** → **Apps** → find your watch 
 
 ---
 
+## Auto-ingest hooks
+
+Health Skill includes Claude Code hooks that **automatically save health data from every message** — workouts, check-ins, labs, weight, symptoms, medication mentions — without you having to run a command.
+
+**What gets saved:**
+- Text: "ran 5km in 28 min" → workout entry with date
+- Text: "I feel sick, weight 85kg" → symptom check-in + weight entry
+- File reads: lab CSV, workout export → structured entries extracted from content
+- Photos: Claude extracts data and saves it (see [photo-handling.md](references/photo-handling.md))
+
+**Install:**
+```bash
+git clone https://github.com/googlarz/health-skill.git
+bash health-skill/hooks/install.sh
+```
+
+Data is saved to your workspace as dated entries in `HEALTH_TIMELINE.md` (markdown workspaces) or directly into the structured profile (JSON workspaces). After each response, Claude shows what was auto-saved.
+
+**Works with any workspace layout** — the hooks detect your workspace root and the right person automatically from the current project directory.
+
+---
+
 ## Setup for Claude Code
 
 ```bash
