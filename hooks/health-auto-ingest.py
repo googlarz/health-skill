@@ -184,8 +184,8 @@ def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
     candidate = _ctx_db_path(project_dir)
     if candidate:
         return candidate
-    # Fall back: scan all DBs for this session_id
-    for db in sorted(db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime, reverse=True):
+    # Fall back: scan the 5 most-recently-modified DBs for this session_id
+    for db in sorted(db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime, reverse=True)[:5]:
         try:
             conn = sqlite3.connect(str(db))
             row = conn.execute(

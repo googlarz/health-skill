@@ -14,35 +14,51 @@ import re
 import sys
 from pathlib import Path
 
-# Re-use helpers from health-auto-ingest
-sys.path.insert(0, str(Path(__file__).parent))
-import importlib.util as _ilu
-_spec = _ilu.spec_from_file_location("health_auto_ingest", Path(__file__).parent / "health-auto-ingest.py")
-_mod = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-classify = _mod.classify
-find_workspace = _mod.find_workspace
-find_person_id = _mod.find_person_id
-_load_health_scripts = _mod._load_health_scripts
-insert_ctx_events = _mod.insert_ctx_events
-_WEIGHT_SIGNALS = _mod._WEIGHT_SIGNALS
-
-
+# ── Fast pre-filter — runs before the expensive module import ─────────────────
+# These inline checks mirror is_health_file() so we can exit early.
 _HEALTH_FILE_EXTS = {".csv", ".txt", ".md", ".json", ".xml"}
 _HEALTH_FILENAME_SIGNALS = re.compile(
     r"(lab|blood|workout|training|run|health|suunto|garmin|apple.health|export|results?)",
     re.IGNORECASE,
 )
+# Minimal classify signals — just enough to decide whether to load the full module
+_QUICK_HEALTH_SIGNALS = re.compile(
+    r"\b(tsh|ldl|hdl|a1c|glucose|cholesterol|ran|jog|cycling|deadlift|squat|"
+    r"km|pace|heart rate|workout|mood|energy|pain|slept|fatigue|tired|"
+    r"weight|weigh|calories|kcal|protein|mg|mcg)\b",
+    re.IGNORECASE,
+)
 
 
-def is_health_file(file_path: str, content: str) -> bool:
+def _is_health_file_quick(file_path: str, content: str) -> bool:
+    """Cheap check — no imports needed."""
     p = Path(file_path)
     if p.suffix.lower() not in _HEALTH_FILE_EXTS:
         return False
     if _HEALTH_FILENAME_SIGNALS.search(p.name):
         return True
-    # Classify content
-    return bool(classify(content[:500]))
+    return bool(_QUICK_HEALTH_SIGNALS.search(content[:500]))
+
+
+# ── Full module import — only reached when file looks health-related ──────────
+def _load_ingest_module():
+    sys.path.insert(0, str(Path(__file__).parent))
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location(
+        "health_auto_ingest", Path(__file__).parent / "health-auto-ingest.py"
+    )
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    return _mod
+
+
+def is_health_file(file_path: str, content: str, classify_fn) -> bool:
+    p = Path(file_path)
+    if p.suffix.lower() not in _HEALTH_FILE_EXTS:
+        return False
+    if _HEALTH_FILENAME_SIGNALS.search(p.name):
+        return True
+    return bool(classify_fn(content[:500]))
 
 
 def extract_date_from_content(content: str) -> str:
@@ -78,7 +94,20 @@ def main() -> None:
     if not content or len(content) < 20:
         return
 
-    if not is_health_file(file_path, content):
+    # ── Fast exit: skip expensive module load for non-health files ────────────
+    if not _is_health_file_quick(file_path, content):
+        return
+
+    # ── Lazy-load the full ingest module only when needed ─────────────────────
+    _mod = _load_ingest_module()
+    classify = _mod.classify
+    find_workspace = _mod.find_workspace
+    find_person_id = _mod.find_person_id
+    _load_health_scripts = _mod._load_health_scripts
+    insert_ctx_events = _mod.insert_ctx_events
+    _WEIGHT_SIGNALS = _mod._WEIGHT_SIGNALS
+
+    if not is_health_file(file_path, content, classify):
         return
 
     session_id = data.get("session_id", "")
