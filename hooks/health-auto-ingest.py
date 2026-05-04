@@ -11,6 +11,7 @@ Writes /tmp/health-ingest-{session_id}.json for the Stop hook to display.
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import os
 import re
@@ -185,11 +186,14 @@ def _read_session_index() -> dict:
         return {}
 
 
-def _write_session_index(session_id: str, db_path: Path) -> None:
+def _write_session_index(session_id: str, db_path: Path, _index: dict | None = None) -> None:
+    """Atomic write — read-modify-write with temp+rename so a crash can't corrupt the cache."""
     try:
-        index = _read_session_index()
+        index = _index if _index is not None else _read_session_index()
         index[session_id] = db_path.name
-        _SESSION_INDEX.write_text(json.dumps(index))
+        tmp = _SESSION_INDEX.with_suffix(".tmp")
+        tmp.write_text(json.dumps(index))
+        tmp.replace(_SESSION_INDEX)  # atomic on POSIX
     except Exception:
         pass
 
@@ -210,11 +214,11 @@ def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
     # 2. Project dir hash
     candidate = _ctx_db_path(project_dir)
     if candidate:
-        _write_session_index(session_id, candidate)
+        _write_session_index(session_id, candidate, index)  # reuse already-read index
         return candidate
 
-    # 3. Fallback: scan 5 most-recently-modified DBs
-    for db in sorted(db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime, reverse=True)[:5]:
+    # 3. Fallback: 5 most-recently-modified DBs — heapq avoids sorting all N files
+    for db in heapq.nlargest(5, db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime):
         try:
             conn = sqlite3.connect(str(db))
             row = conn.execute(
@@ -222,7 +226,7 @@ def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
             ).fetchone()
             conn.close()
             if row:
-                _write_session_index(session_id, db)
+                _write_session_index(session_id, db, index)  # reuse already-read index
                 return db
         except Exception:
             continue
