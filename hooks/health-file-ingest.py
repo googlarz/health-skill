@@ -52,13 +52,15 @@ def _load_ingest_module():
     return _mod
 
 
-def is_health_file(file_path: str, content: str, classify_fn) -> bool:
+def get_health_types(file_path: str, content: str, classify_fn) -> list:
+    """Return classify types if health file, else []. Avoids double classify call."""
     p = Path(file_path)
     if p.suffix.lower() not in _HEALTH_FILE_EXTS:
-        return False
-    if _HEALTH_FILENAME_SIGNALS.search(p.name):
-        return True
-    return bool(classify_fn(content[:500]))
+        return []
+    # Run classify on 2000 chars regardless of how we matched — single call, full result
+    if _HEALTH_FILENAME_SIGNALS.search(p.name) or _QUICK_HEALTH_SIGNALS.search(content[:500]):
+        return classify_fn(content[:2000])
+    return []
 
 
 def extract_date_from_content(content: str) -> str:
@@ -107,7 +109,10 @@ def main() -> None:
     insert_ctx_events = _mod.insert_ctx_events
     _WEIGHT_SIGNALS = _mod._WEIGHT_SIGNALS
 
-    if not is_health_file(file_path, content, classify):
+    # Fix 1: single classify call — get_health_types() replaces is_health_file() + classify()
+    # Fix 2: removed redundant _load_health_scripts(root) — ingest() calls it internally
+    types = get_health_types(file_path, content, classify)
+    if not types:
         return
 
     session_id = data.get("session_id", "")
@@ -118,11 +123,6 @@ def main() -> None:
         return
 
     person_id = find_person_id(root)
-    _load_health_scripts(root)
-
-    types = classify(content[:2000])
-    if not types:
-        return
 
     file_date = extract_date_from_content(content)
     from datetime import date as _date

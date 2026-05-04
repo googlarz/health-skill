@@ -175,16 +175,45 @@ def _ctx_db_path(project_dir: str) -> Path | None:
     return None
 
 
+_SESSION_INDEX = Path.home() / ".claude" / "context-mode" / "sessions" / "session_index.json"
+
+
+def _read_session_index() -> dict:
+    try:
+        return json.loads(_SESSION_INDEX.read_text()) if _SESSION_INDEX.exists() else {}
+    except Exception:
+        return {}
+
+
+def _write_session_index(session_id: str, db_path: Path) -> None:
+    try:
+        index = _read_session_index()
+        index[session_id] = db_path.name
+        _SESSION_INDEX.write_text(json.dumps(index))
+    except Exception:
+        pass
+
+
 def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
-    """Find context-mode session DB by project dir hash, falling back to session_id scan."""
+    """Find context-mode session DB. Checks index first, then hash, then limited glob."""
     db_dir = Path.home() / ".claude" / "context-mode" / "sessions"
     if not db_dir.exists():
         return None
-    # Try project dir hash first
+
+    # 1. Fast path: session index (O(1) lookup)
+    index = _read_session_index()
+    if session_id in index:
+        p = db_dir / index[session_id]
+        if p.exists():
+            return p
+
+    # 2. Project dir hash
     candidate = _ctx_db_path(project_dir)
     if candidate:
+        _write_session_index(session_id, candidate)
         return candidate
-    # Fall back: scan the 5 most-recently-modified DBs for this session_id
+
+    # 3. Fallback: scan 5 most-recently-modified DBs
     for db in sorted(db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime, reverse=True)[:5]:
         try:
             conn = sqlite3.connect(str(db))
@@ -193,6 +222,7 @@ def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
             ).fetchone()
             conn.close()
             if row:
+                _write_session_index(session_id, db)
                 return db
         except Exception:
             continue
@@ -206,15 +236,18 @@ def insert_ctx_events(session_id: str, project_dir: str, events: list[dict]) -> 
         return False
     try:
         conn = sqlite3.connect(str(db_path))
-        for ev in events:
-            data_hash = hashlib.sha256(ev["data"].encode()).hexdigest()[:16]
-            conn.execute(
-                "INSERT OR IGNORE INTO session_events "
-                "(session_id, type, category, priority, data, source_hook, data_hash) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (session_id, ev["type"], ev["category"], ev["priority"],
-                 ev["data"], "UserPromptSubmit:health-auto-ingest", data_hash),
-            )
+        rows = [
+            (session_id, ev["type"], ev["category"], ev["priority"],
+             ev["data"], "UserPromptSubmit:health-auto-ingest",
+             hashlib.sha256(ev["data"].encode()).hexdigest()[:16])
+            for ev in events
+        ]
+        conn.executemany(
+            "INSERT OR IGNORE INTO session_events "
+            "(session_id, type, category, priority, data, source_hook, data_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
         conn.commit()
         conn.close()
         return True
@@ -263,6 +296,7 @@ def ingest(root: Path, person_id: str, prompt: str, types: list[str],
     saved = []
     ctx_events: list[dict] = []
     today = date.today().isoformat()
+    is_md = _is_markdown_workspace(root, person_id)  # compute once, used per-type below
 
     if "workout" in types:
         try:
@@ -278,7 +312,7 @@ def ingest(root: Path, person_id: str, prompt: str, types: list[str],
                 if dur:
                     parts.append(f"{dur}min")
                 summary = " · ".join(str(p) for p in parts)
-                if _is_markdown_workspace(root, person_id):
+                if is_md:
                     _append_timeline(root, person_id,
                         f"\n## {today} — Workout\n- {summary}\n"
                         + (f"- Duration: {dur} min\n" if dur else "")
@@ -308,7 +342,7 @@ def ingest(root: Path, person_id: str, prompt: str, types: list[str],
                 parts = [f"{k}={v}" for k, v in metrics.items()]
                 if notes:
                     parts.append(f"notes='{notes}'")
-                if _is_markdown_workspace(root, person_id):
+                if is_md:
                     lines = "\n".join(f"- {p}" for p in parts)
                     _append_timeline(root, person_id, f"\n## {today} — Check-in\n{lines}\n")
                 else:
@@ -351,7 +385,7 @@ def ingest(root: Path, person_id: str, prompt: str, types: list[str],
             if auto:
                 names = ", ".join(f"{c['candidate']['name']} {c['candidate']['value']}{c['candidate']['unit']}"
                                   for c in auto[:4])
-                if _is_markdown_workspace(root, person_id):
+                if is_md:
                     lines = "\n".join(
                         f"- {c['candidate']['name']}: {c['candidate']['value']} {c['candidate']['unit']}"
                         for c in auto
@@ -379,7 +413,7 @@ def ingest(root: Path, person_id: str, prompt: str, types: list[str],
             if m:
                 val = float(m.group(2))
                 unit = "kg" if m.group(3).lower().startswith("k") else "lbs"
-                if _is_markdown_workspace(root, person_id):
+                if is_md:
                     _append_timeline(root, person_id, f"\n## {today} — Weight\n- {val} {unit}\n")
                 else:
                     from care_workspace import record_weight
