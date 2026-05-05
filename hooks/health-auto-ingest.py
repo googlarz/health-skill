@@ -11,7 +11,6 @@ Writes /tmp/health-ingest-{session_id}.json for the Stop hook to display.
 from __future__ import annotations
 
 import hashlib
-import heapq
 import json
 import os
 import re
@@ -19,6 +18,34 @@ import sqlite3
 import sys
 from datetime import date
 from pathlib import Path
+
+
+# ── Session-scoped workspace cache ───────────────────────────────────────────
+# Avoids repeated filesystem calls for find_workspace + find_person_id.
+# Keyed by session_id; stored in /tmp so it's automatically cleaned up.
+
+def _cache_path(session_id: str) -> Path:
+    return Path(f"/tmp/health-ws-{session_id}.json")
+
+
+def _load_ws_cache(session_id: str) -> tuple[Path, str] | tuple[None, None]:
+    try:
+        p = _cache_path(session_id)
+        if p.exists():
+            d = json.loads(p.read_text())
+            root = Path(d["root"])
+            if root.exists():
+                return root, d["person_id"]
+    except Exception:
+        pass
+    return None, None
+
+
+def _save_ws_cache(session_id: str, root: Path, person_id: str) -> None:
+    try:
+        _cache_path(session_id).write_text(json.dumps({"root": str(root), "person_id": person_id}))
+    except Exception:
+        pass
 
 
 # ── Workspace detection ───────────────────────────────────────────────────────
@@ -112,9 +139,10 @@ def find_person_id(root: Path, input_data: dict | None = None) -> str:
 # ── Health data classification ────────────────────────────────────────────────
 
 _WORKOUT_SIGNALS = re.compile(
-    r"\b(ran|run|jog|cycling|swim|deadlift|squat|bench|press|pull.?up|push.?up|"
-    r"sets?|reps?|km|miles?|pace|heart rate|vo2|cardio|workout|"
-    r"training|lifting|session|gym|crossfit|hiit|interval|sprint|walked?)\b",
+    r"\b(ran\b|jogged?|cycling|swam|swimming|deadlift|squat|bench press|pull.?up|push.?up|"
+    r"reps?|\d+\s*km|\d+\s*miles?|heart rate|vo2\s*max|cardio|workout|"
+    r"weightlifting|lifting|crossfit|hiit|sprinted?|walked? \d+)\b"
+    r"|(?<!\w)gym\b",
     re.IGNORECASE,
 )
 _CHECKIN_SIGNALS = re.compile(
@@ -186,14 +214,11 @@ def _read_session_index() -> dict:
         return {}
 
 
-def _write_session_index(session_id: str, db_path: Path, _index: dict | None = None) -> None:
-    """Atomic write — read-modify-write with temp+rename so a crash can't corrupt the cache."""
+def _write_session_index(session_id: str, db_path: Path) -> None:
     try:
-        index = _index if _index is not None else _read_session_index()
+        index = _read_session_index()
         index[session_id] = db_path.name
-        tmp = _SESSION_INDEX.with_suffix(".tmp")
-        tmp.write_text(json.dumps(index))
-        tmp.replace(_SESSION_INDEX)  # atomic on POSIX
+        _SESSION_INDEX.write_text(json.dumps(index))
     except Exception:
         pass
 
@@ -214,11 +239,11 @@ def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
     # 2. Project dir hash
     candidate = _ctx_db_path(project_dir)
     if candidate:
-        _write_session_index(session_id, candidate, index)  # reuse already-read index
+        _write_session_index(session_id, candidate)
         return candidate
 
-    # 3. Fallback: 5 most-recently-modified DBs — heapq avoids sorting all N files
-    for db in heapq.nlargest(5, db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime):
+    # 3. Fallback: scan 5 most-recently-modified DBs
+    for db in sorted(db_dir.glob("*.db"), key=lambda p: p.stat().st_mtime, reverse=True)[:5]:
         try:
             conn = sqlite3.connect(str(db))
             row = conn.execute(
@@ -226,7 +251,7 @@ def _find_db_for_session(session_id: str, project_dir: str) -> Path | None:
             ).fetchone()
             conn.close()
             if row:
-                _write_session_index(session_id, db, index)  # reuse already-read index
+                _write_session_index(session_id, db)
                 return db
         except Exception:
             continue
@@ -461,13 +486,16 @@ def main() -> None:
     if not types:
         return
 
-    root = find_workspace(data)
-    if not root:
-        return
-
-    person_id = find_person_id(root, data)
     session_id = data.get("session_id", "")
     project_dir = data.get("cwd") or data.get("project_dir") or ""
+
+    root, person_id = _load_ws_cache(session_id)
+    if root is None:
+        root = find_workspace(data)
+        if not root:
+            return
+        person_id = find_person_id(root, data)
+        _save_ws_cache(session_id, root, person_id)
 
     saved = ingest(root, person_id, prompt, types, session_id, project_dir, data)
 
