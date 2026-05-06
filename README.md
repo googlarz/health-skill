@@ -22,7 +22,7 @@ It's also a **daily longevity companion**: log check-ins, track your cycle, desi
 ## Contents
 
 - [Setup for Claude Cowork](#setup-for-claude-cowork)
-- [Apple Health Sync — Full Tutorial (Mac)](#apple-health-sync--full-tutorial-mac)
+- [Wearable & Apple Health Sync](#wearable--apple-health-sync)
 - [Setup for Claude Code](#setup-for-claude-code)
 - [What You Get](#what-you-get)
 - [Key Features](#key-features)
@@ -91,148 +91,26 @@ cd ~/.claude/skills/health-skill && git pull
 
 ---
 
-## Apple Health Sync — Full Tutorial (Mac)
+## Wearable & Apple Health Sync
 
-This section covers how to get data from **any fitness watch** (Garmin, Suunto, Polar, Whoop, Oura, Amazfit, Withings, Fitbit) into the workspace automatically on a Mac.
+Health Skill can import data from any fitness watch or wearable. There are two paths:
 
-The path is always the same:
+**Option A — Via Apple Health (iPhone users)**
+Most watches (Garmin, Suunto, Polar, Whoop, Oura, Amazfit, Withings) sync to Apple Health through their companion app. From Apple Health you can export data and drop it into your workspace `inbox/wearable/` folder, or use an Apple Health export app of your choice to automate the transfer to iCloud Drive.
 
-```
-Your watch  →  companion iPhone app  →  Apple Health  →  Health Auto Export  →  iCloud Drive  →  your workspace
-```
+**Option B — Direct from your watch app**
+Many watch brands let you export workouts or health data directly from their app as CSV or JSON — no Apple Health needed. Drop the file into `inbox/wearable/` and run `import-wearable`.
 
-Each link in this chain is automatic once set up. You configure it once and forget about it.
+**Option C — Manual CSV/JSON drop**
+Any CSV or JSON with columns for date, steps, heart rate, sleep, etc. is accepted. Drop it in `inbox/wearable/` and run `import-wearable`.
 
----
-
-### Step 1 — Enable Apple Health sync in your watch app
-
-Each brand has its own app. Enable the Apple Health connection inside it:
-
-#### Garmin
-1. Open **Garmin Connect** on iPhone
-2. Go to **More** (bottom-right) → **Settings** → **Connected Apps**
-3. Tap **Apple Health** → enable **Write to Apple Health**
-4. Grant all permissions when iOS asks
-
-Garmin syncs: steps, heart rate, resting HR, VO2 max, sleep, weight, calories, HRV, SpO2, stress score.
-
-#### Suunto
-1. Open the **Suunto** app on iPhone
-2. Tap your profile icon → **Connections**
-3. Tap **Apple Health** → **Connect**
-4. Grant all permissions
-
-Suunto syncs: steps, heart rate, sleep, calories, workouts.
-
-#### Polar
-1. Open **Polar Flow** on iPhone
-2. Tap **More** → **Settings** → **Apple Health**
-3. Toggle ON → grant permissions
-
-Polar syncs: steps, heart rate, sleep, calories, VO2 max, activity.
-
-#### Whoop
-1. Open the **Whoop** app on iPhone
-2. Tap your profile → **App Integrations** → **Apple Health**
-3. Enable **Write to Apple Health** → grant all permissions
-
-Whoop syncs: recovery score, strain, sleep hours, sleep stages, heart rate, HRV, resting HR, SpO2.
-
-#### Oura Ring
-1. Open the **Oura** app on iPhone
-2. Tap your profile → **Connections** → **Apple Health**
-3. Toggle ON → grant all permissions
-
-Oura syncs: sleep stages, readiness, HRV, resting HR, body temperature, steps, SpO2.
-
-#### Amazfit (Zepp)
-1. Open the **Zepp** app on iPhone
-2. Tap **Profile** → **Connect to Other Apps** → **Apple Health**
-3. Enable → grant permissions
-
-Amazfit syncs: steps, heart rate, sleep, SpO2, stress.
-
-#### Withings
-1. Open the **Withings Health Mate** app
-2. Tap **Devices** → your device → **Settings** → **Apple Health**
-3. Enable → grant permissions
-
-Withings syncs: weight, blood pressure, heart rate, sleep, steps, SpO2.
-
-#### Fitbit
-Fitbit removed native Apple Health sync in 2023. Use one of these workarounds:
-- **[Power My Analytics](https://powermyanalytics.com/)** — paid bridge, syncs Fitbit → Apple Health
-- **Manual export**: in the Fitbit app, go to **Account** → **Export My Account Data**, download the CSV, and drop it into `inbox/wearable/` (the CSV importer handles it)
-
----
-
-### Step 2 — Install Health Auto Export
-
-Download **[Health Auto Export - JSON+CSV](https://apps.apple.com/app/health-auto-export-json-csv/id1477944755)** from the App Store ($3.99 one-time).
-
-This app reads from Apple Health and writes the data to a file on your Mac automatically. It is the bridge between Apple Health (iOS-only) and your Mac workspace.
-
----
-
-### Step 3 — Configure Health Auto Export
-
-Open the app on your iPhone:
-
-1. Tap **Exports** → **+**
-2. Name it: `Health Skill`
-3. Set **Format**: `JSON`
-4. Tap **Metrics** → select all of:
-   - Step Count
-   - Resting Heart Rate
-   - Heart Rate
-   - Heart Rate Variability (SDNN)
-   - VO2 Max
-   - Body Mass
-   - Oxygen Saturation
-   - Blood Pressure (Systolic + Diastolic)
-   - Sleep Analysis
-5. Set **Export destination**: `iCloud Drive` → folder: `Health Auto Export`
-6. Set **Schedule**: `Every Hour`
-7. Toggle **Auto Export**: ON
-
-The app will now write a `.json` file to iCloud Drive every hour with yesterday's and today's data.
-
----
-
-### Step 4 — Link iCloud Drive to your workspace inbox (Mac)
-
-On your Mac, open Terminal and run:
-
-```bash
-# Replace ~/Health/me with your actual person folder
-# Replace "me" with your person ID
-
-# Make sure the inbox folder exists
-mkdir -p ~/Health/me/inbox/wearable
-
-# Create a symlink so the exported JSON files land in your inbox automatically
-ln -sf ~/Library/Mobile\ Documents/com\~apple\~CloudDocs/Health\ Auto\ Export \
-       ~/Health/me/inbox/wearable/health-auto-export
-```
-
-Now every file Health Auto Export writes to iCloud will appear inside `inbox/wearable/health-auto-export/` on your Mac as soon as iCloud syncs it (usually within 1–2 minutes).
-
-> **If the folder doesn't exist yet:** open the Files app on your iPhone, navigate to iCloud Drive, and create a folder called `Health Auto Export`. Or just let the app create it on the first export.
-
----
-
-### Step 5 — Install the background watcher
-
-This installs a macOS background job that runs `sync-wearable` every hour:
+Once files land in `inbox/wearable/`, install the background watcher to import them automatically:
 
 ```bash
 python3 ~/.claude/skills/health-skill/scripts/care_workspace.py setup-watch \
   --root ~/Health/me \
   --person-id me
 ```
-
-That's it. The watcher starts immediately and runs every hour in the background — even after a restart.
 
 **Check that it's running:**
 ```bash
