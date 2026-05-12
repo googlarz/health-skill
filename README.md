@@ -95,6 +95,8 @@ cd ~/.claude/skills/health-skill && git pull
 
 Health Skill can import data from any fitness watch or wearable. There are two paths:
 
+> **Suunto users:** there's a dedicated [suunto-mcp](https://github.com/googlarz/suunto-mcp) server that connects your Suunto watch directly to Claude via the official Suunto API — live workouts, HRV, sleep, and GPX export without any manual export steps. Install it alongside Health Skill for a fully automated pipeline.
+
 **Option A — Via Apple Health (iPhone users)**
 Most watches (Garmin, Suunto, Polar, Whoop, Oura, Amazfit, Withings) sync to Apple Health through their companion app. From Apple Health you can export data and drop it into your workspace `inbox/wearable/` folder, or use an Apple Health export app of your choice to automate the transfer to iCloud Drive.
 
