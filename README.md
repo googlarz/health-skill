@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-237%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-258%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.2-purple" alt="v2.2">
+    <img src="https://img.shields.io/badge/version-2.2.1-purple" alt="v2.2.1">
   </p>
 </p>
 

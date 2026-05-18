@@ -74,6 +74,8 @@ DEFAULT_PROFILE = {
     "screenings": [],  # preventive care (mammogram, colonoscopy, etc.)
     "family_history": [],  # parent/sibling conditions for genetic risk
     "goals": [],  # longevity / fitness / health goals with targets
+    "supplements": [],  # supplements/nutraceuticals (name, dose, frequency)
+    "interventions": [],  # named lifestyle interventions with protocols & outcome metrics
     "preferences": {
         "summary_style": "concise",
         "weight_unit": "kg",
@@ -1903,6 +1905,108 @@ def changes_since_last_session(root: Path, person_id: str) -> dict[str, Any]:
             result["resolved_items"] += 1
 
     return result
+
+
+# ── Intervention tracker ────────────────────────────────────────────────────
+
+def log_intervention(
+    root: Path,
+    person_id: str,
+    name: str,
+    start_date: str,
+    protocol: str,
+    outcome_metric: str,
+) -> dict[str, Any]:
+    """Add or update a named intervention in the profile.
+
+    Parameters
+    ----------
+    name:           Short label, e.g. "time-restricted eating"
+    start_date:     ISO date string, e.g. "2025-01-15"
+    protocol:       Free-text description of what the person is doing
+    outcome_metric: What to track, e.g. "fasting glucose", "weight_kg"
+
+    Returns the stored intervention record.
+    """
+    profile = load_profile(root, person_id)
+    interventions: list[dict[str, Any]] = profile.get("interventions") or []
+
+    # Upsert by name (case-insensitive)
+    existing_idx = next(
+        (i for i, iv in enumerate(interventions) if iv.get("name", "").lower() == name.lower()),
+        None,
+    )
+    record: dict[str, Any] = {
+        "name": name,
+        "start_date": start_date,
+        "protocol": protocol,
+        "outcome_metric": outcome_metric,
+        "status": "active",
+        "logged_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "notes": [],
+    }
+    if existing_idx is not None:
+        # Preserve existing notes
+        record["notes"] = interventions[existing_idx].get("notes") or []
+        interventions[existing_idx] = record
+    else:
+        interventions.append(record)
+
+    profile["interventions"] = interventions
+    save_profile(root, person_id, profile)
+    return record
+
+
+def intervention_status(root: Path, person_id: str) -> list[dict[str, Any]]:
+    """Return all interventions with a brief adherence/progress summary.
+
+    Each entry includes:
+        name, status, start_date, protocol, outcome_metric,
+        days_running, latest_value (from vitals/check-ins if matchable),
+        notes_count
+    """
+    profile = load_profile(root, person_id)
+    interventions: list[dict[str, Any]] = profile.get("interventions") or []
+    today = date.today()
+    result = []
+    for iv in interventions:
+        start = _parse_intervention_date(iv.get("start_date", ""))
+        days_running = (today - start).days if start else None
+
+        # Try to find latest value for outcome_metric in vitals
+        metric_key = iv.get("outcome_metric", "")
+        latest_value: Any = None
+        try:
+            vitals = load_vital_entries(root, person_id)
+            candidates = [
+                v for v in vitals
+                if metric_key.lower() in str(v.get("metric", "")).lower()
+            ]
+            if candidates:
+                candidates.sort(key=lambda v: str(v.get("date") or v.get("recorded_at", "")))
+                latest_value = candidates[-1].get("value")
+        except Exception:
+            pass
+
+        result.append({
+            "name": iv.get("name"),
+            "status": iv.get("status", "active"),
+            "start_date": iv.get("start_date"),
+            "protocol": iv.get("protocol"),
+            "outcome_metric": metric_key,
+            "days_running": days_running,
+            "latest_value": latest_value,
+            "notes_count": len(iv.get("notes") or []),
+        })
+    return result
+
+
+def _parse_intervention_date(s: str) -> "date | None":
+    try:
+        from datetime import datetime as _dt
+        return _dt.strptime(str(s)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
 
 
 # Sentinel for project-root mode (one person = one folder).

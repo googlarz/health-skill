@@ -134,7 +134,7 @@ def compute_nudges(root: Path, person_id: str) -> list[dict[str, Any]]:
         })
 
     # ── Continuous pattern alerts ────────────────────────────────────────────
-    nudges.extend(_pattern_alerts(p, today))
+    nudges.extend(_pattern_alerts(p, today, root=root, person_id=person_id))
 
     # Sort: high > medium > low, stable order
     order = {"high": 0, "medium": 1, "low": 2}
@@ -160,7 +160,12 @@ def _vitals_streak(
     return [by_day[k] for k in sorted(by_day)]
 
 
-def _pattern_alerts(p: dict[str, Any], today: date) -> list[dict[str, Any]]:
+def _pattern_alerts(
+    p: dict[str, Any],
+    today: date,
+    root: "Path | None" = None,
+    person_id: str = "",
+) -> list[dict[str, Any]]:
     """Detect continuous wearable and check-in patterns worth flagging."""
     from datetime import timedelta
 
@@ -260,6 +265,51 @@ def _pattern_alerts(p: dict[str, Any], today: date) -> list[dict[str, Any]]:
                 "detail": "Persistent moderate-to-high pain warrants clinical attention.",
                 "action": "Book an appointment. Run `triage` to prepare a summary for your clinician.",
             })
+
+    # ── Non-dipping BP pattern ────────────────────────────────────────────────
+    if root and person_id:
+        try:
+            try:
+                from .care_workspace import load_vital_entries as _lve
+            except ImportError:
+                from care_workspace import load_vital_entries as _lve  # type: ignore
+
+            bp_entries = [
+                e for e in _lve(root, person_id)
+                if e.get("metric") == "blood_pressure"
+                and e.get("systolic") is not None
+                and e.get("recorded_at")
+            ]
+            day_sys: list[float] = []
+            night_sys: list[float] = []
+            for e in bp_entries:
+                try:
+                    ts = str(e["recorded_at"])
+                    hour = int(ts[11:13]) if len(ts) >= 13 else -1
+                    sys_val = float(e["systolic"])
+                    # Night = 22:00–06:59
+                    if 22 <= hour or hour < 7:
+                        night_sys.append(sys_val)
+                    elif 7 <= hour < 22:
+                        day_sys.append(sys_val)
+                except (ValueError, TypeError, IndexError):
+                    continue
+            if len(day_sys) >= 3 and len(night_sys) >= 3:
+                avg_day = sum(day_sys) / len(day_sys)
+                avg_night = sum(night_sys) / len(night_sys)
+                dip_pct = (avg_day - avg_night) / avg_day * 100 if avg_day > 0 else 0
+                if dip_pct < 10:
+                    alerts.append({
+                        "priority": "medium",
+                        "title": f"Non-dipping BP pattern detected (nocturnal dip {dip_pct:.1f}% — normal ≥10%)",
+                        "detail": (
+                            f"Daytime avg {avg_day:.0f} mmHg sys / Night avg {avg_night:.0f} mmHg sys. "
+                            "Non-dipping is associated with higher cardiovascular risk."
+                        ),
+                        "action": "Mention to your GP — a 24h ambulatory BP monitor (ABPM) can confirm this pattern.",
+                    })
+        except Exception:
+            pass
 
     return alerts
 

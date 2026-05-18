@@ -219,6 +219,70 @@ DRUG_DRUG: list[dict[str, Any]] = [
     },
 ]
 
+# Supplement-drug interactions
+# Each entry: supplement (name fragments), medications (name fragments),
+# severity, effect, action, mechanism
+SUPPLEMENT_DRUG: list[dict[str, Any]] = [
+    {
+        "supplement": ["natto", "fermented soy", "nattokinase"],
+        "medication": ["arb", "candesartan", "losartan", "valsartan", "olmesartan",
+                       "ace inhibitor", "lisinopril", "ramipril", "enalapril",
+                       "spironolactone", "eplerenone"],
+        "severity": "moderate",
+        "effect": "Natto is rich in potassium and vitamin K2; ARBs/ACE inhibitors raise potassium — combined daily use may increase hyperkalaemia risk",
+        "action": "Mention regular natto consumption to your GP. Monitor potassium in routine bloods. Limit natto to ≤1 serving/day if on an ARB or ACE inhibitor.",
+        "mechanism": "ARBs/ACE inhibitors retain potassium by blocking aldosterone; natto's potassium load adds to this. Nattokinase also has mild fibrinolytic activity.",
+    },
+    {
+        "supplement": ["natto", "nattokinase"],
+        "medication": ["warfarin", "coumadin", "rivaroxaban", "apixaban", "dabigatran",
+                       "anticoagulant", "blood thinner"],
+        "severity": "major",
+        "effect": "Nattokinase has fibrinolytic activity and may potentiate anticoagulants — increased bleeding risk",
+        "action": "Avoid nattokinase supplements with anticoagulants. Fermented natto (food) in small amounts is lower risk but should still be disclosed to your prescriber.",
+        "mechanism": "Nattokinase degrades fibrin directly; combined with anticoagulants this can meaningfully increase bleeding risk.",
+    },
+    {
+        "supplement": ["beetroot", "beet", "beetroot extract", "beet juice", "red beet"],
+        "medication": ["amlodipine", "nifedipine", "felodipine", "calcium channel",
+                       "candesartan", "losartan", "valsartan", "arb",
+                       "lisinopril", "ramipril", "ace inhibitor",
+                       "metoprolol", "bisoprolol", "beta-blocker",
+                       "antihypertensive", "blood pressure"],
+        "severity": "moderate",
+        "effect": "Beetroot/nitrates can lower blood pressure; combined with antihypertensives, BP may drop excessively (dizziness, falls)",
+        "action": "Mention regular beetroot supplementation to your GP. Monitor BP at home. Avoid concentrated beet juice supplements — whole beetroot is lower risk.",
+        "mechanism": "Dietary nitrates in beetroot are converted to nitric oxide, causing vasodilation — additive to antihypertensive mechanisms.",
+    },
+    {
+        "supplement": ["hibiscus", "hibiscus tea", "roselle"],
+        "medication": ["amlodipine", "nifedipine", "candesartan", "losartan", "valsartan",
+                       "lisinopril", "ramipril", "metoprolol", "bisoprolol",
+                       "antihypertensive", "blood pressure", "hydrochlorothiazide"],
+        "severity": "moderate",
+        "effect": "Hibiscus has documented BP-lowering effect (≈7 mmHg systolic in RCTs); may augment antihypertensives — hypotension risk",
+        "action": "Inform your GP you drink hibiscus tea daily. Monitor BP. If dizzy or lightheaded, reduce intake.",
+        "mechanism": "Hibiscus flavonoids inhibit ACE and act as mild diuretics and vasodilators — pharmacologically similar mechanism to some BP drugs.",
+    },
+    {
+        "supplement": ["vitamin k2", "mk-7", "mk-4", "menaquinone", "k2"],
+        "medication": ["warfarin", "coumadin", "acenocoumarol", "phenprocoumon"],
+        "severity": "major",
+        "effect": "Vitamin K2 counteracts warfarin — INR may fall unpredictably, reducing anticoagulation and increasing clot risk",
+        "action": "Keep vitamin K2 intake consistent rather than stopping abruptly. Inform your prescriber. INR monitoring frequency may need to increase.",
+        "mechanism": "Warfarin works by blocking vitamin K recycling; high or variable K2 intake directly competes with this mechanism.",
+    },
+    {
+        "supplement": ["fish oil", "omega-3", "epa", "dha", "omega3"],
+        "medication": ["warfarin", "coumadin", "rivaroxaban", "apixaban", "dabigatran",
+                       "aspirin", "clopidogrel", "ticagrelor"],
+        "severity": "moderate",
+        "effect": "High-dose omega-3 (≥3g/day) may inhibit platelet aggregation — additive bleeding risk with anticoagulants or antiplatelets",
+        "action": "At standard supplemental doses (1–2g/day) the risk is low. At high doses (≥3g/day), discuss with your prescriber and monitor for bruising.",
+        "mechanism": "EPA/DHA incorporate into platelet membranes, altering thromboxane production and reducing platelet activation.",
+    },
+]
+
 # Drug-condition interactions (e.g., metformin in renal impairment)
 DRUG_CONDITION: list[dict[str, Any]] = [
     {
@@ -258,6 +322,15 @@ def _any_med_matches(medications: list[dict[str, Any]], keywords: list[str]) -> 
     ]
 
 
+def _any_supplement_matches(supplements: list[dict[str, Any]], keywords: list[str]) -> list[str]:
+    """Match supplement entries by name fragment."""
+    return [
+        s.get("name", "?")
+        for s in supplements
+        if _med_matches(s.get("name", ""), keywords)
+    ]
+
+
 def _condition_present(conditions: list[dict[str, Any]], keywords: list[str]) -> bool:
     for c in conditions:
         name = (c.get("name") or "").lower()
@@ -267,11 +340,12 @@ def _condition_present(conditions: list[dict[str, Any]], keywords: list[str]) ->
 
 
 def check_interactions(profile: dict[str, Any]) -> list[dict[str, Any]]:
-    """Check for drug-drug and drug-condition interactions in the profile.
+    """Check for drug-drug, supplement-drug, and drug-condition interactions.
 
     Returns a list of interaction alerts, sorted by severity (critical first).
     """
     medications = profile.get("medications") or []
+    supplements = profile.get("supplements") or []
     conditions = profile.get("conditions") or []
     alerts: list[dict[str, Any]] = []
 
@@ -289,6 +363,25 @@ def check_interactions(profile: dict[str, Any]) -> list[dict[str, Any]]:
                 "mechanism": rule.get("mechanism", ""),
                 "summary": (
                     f"[{rule['severity'].upper()}] {' + '.join(matched_a + matched_b)}: "
+                    f"{rule['effect']}"
+                ),
+            })
+
+    # Supplement-drug interactions
+    for rule in SUPPLEMENT_DRUG:
+        matched_sups = _any_supplement_matches(supplements, rule["supplement"])
+        matched_meds = _any_med_matches(medications, rule["medication"])
+        if matched_sups and matched_meds:
+            labels = matched_sups + matched_meds
+            alerts.append({
+                "type": "supplement-drug",
+                "severity": rule["severity"],
+                "drugs": labels,
+                "effect": rule["effect"],
+                "action": rule["action"],
+                "mechanism": rule.get("mechanism", ""),
+                "summary": (
+                    f"[{rule['severity'].upper()}] {' + '.join(labels)}: "
                     f"{rule['effect']}"
                 ),
             })
@@ -327,13 +420,15 @@ def render_interactions_text(profile: dict[str, Any]) -> str:
             "Always confirm with your pharmacist or prescriber._\n"
         )
 
-    lines = ["# Medication Interactions\n"]
+    lines = ["# Medication & Supplement Interactions\n"]
     lines.append(f"Found **{len(alerts)}** interaction(s) to review:\n")
 
     icons = {"critical": "🔴", "major": "🟠", "moderate": "🟡"}
+    type_labels = {"drug-drug": "Drug–Drug", "supplement-drug": "Supplement–Drug", "drug-condition": "Drug–Condition"}
     for a in alerts:
         icon = icons.get(a["severity"], "⚪")
-        lines.append(f"## {icon} {a['severity'].upper()}: {' + '.join(a['drugs'])}\n")
+        label = type_labels.get(a["type"], "")
+        lines.append(f"## {icon} {a['severity'].upper()} ({label}): {' + '.join(a['drugs'])}\n")
         lines.append(f"**Effect:** {a['effect']}\n")
         lines.append(f"**What to do:** {a['action']}\n")
         if a.get("mechanism"):

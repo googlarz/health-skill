@@ -172,6 +172,35 @@ def parse_workout(text: str) -> dict[str, Any]:
         result["intensity"] = "moderate"
 
     result["notes"] = t
+
+    # ── Run metrics: parse key=value or labelled patterns ────────────────────
+    # Supports patterns like "TSS 45", "HR 142", "cadence 146 spm", "VO2max 41.2"
+    _run_patterns: list[tuple[str, str, str]] = [
+        # (field_name, regex_pattern, unit_hint)
+        ("tss",              r"tss\s*[:\s=]?\s*(\d+(?:\.\d+)?)",         ""),
+        ("ngp",              r"ngp\s*[:\s=]?\s*([\d:]+)",                  "min/km"),
+        ("power_avg_w",      r"(?:avg\s*power|power\s*avg)\s*[:\s=]?\s*(\d+)\s*w", "w"),
+        ("power_np_w",       r"(?:np|norm(?:alised)?\s*power)\s*[:\s=]?\s*(\d+)\s*w", "w"),
+        ("epoc",             r"epoc\s*[:\s=]?\s*(\d+(?:\.\d+)?)",         ""),
+        ("pte",              r"pte\s*[:\s=]?\s*(\d+(?:\.\d+)?)",          ""),
+        ("cadence_avg",      r"(?:avg\s*)?cadence\s*[:\s=]?\s*(\d+)\s*spm", "spm"),
+        ("vo2max_est",       r"vo2\s*max\s*[:\s=]?\s*(\d+(?:\.\d+)?)",   ""),
+        ("recovery_time_h",  r"recovery\s*time\s*[:\s=]?\s*(\d+(?:\.\d+)?)\s*h", "h"),
+        ("temp_c",           r"temp\s*[:\s=]?\s*(\d+(?:\.\d+)?)\s*°?c",  "c"),
+        ("hr_avg",           r"(?:avg\s*hr|hr\s*avg|heart rate)\s*[:\s=]?\s*(\d+)\s*bpm", "bpm"),
+        ("gct_ms",           r"gct\s*[:\s=]?\s*(\d+(?:\.\d+)?)\s*ms",    "ms"),
+        ("vertical_osc_cm",  r"(?:vertical\s*osc|vert(?:ical)?)\s*[:\s=]?\s*(\d+(?:\.\d+)?)\s*cm", "cm"),
+        ("stride_length_cm", r"stride\s*(?:length)?\s*[:\s=]?\s*(\d+(?:\.\d+)?)\s*cm", "cm"),
+        ("recovery_hr_drop", r"recovery\s*hr\s*[:\s=]?\s*[-–]?(\d+)\s*bpm", "bpm"),
+    ]
+    for field, pat, _ in _run_patterns:
+        m = re.search(pat, low)
+        if m and field not in result:
+            try:
+                result[field] = float(m.group(1))
+            except ValueError:
+                result[field] = m.group(1)
+
     return result
 
 
@@ -236,6 +265,86 @@ def log_workout(root: Path, person_id: str, workout: dict[str, Any]) -> dict[str
         )
 
     return {"workout": record, "new_prs": new_prs}
+
+
+# Extended run metrics stored verbatim from device exports.
+# All fields are optional — log whatever the device provides.
+RUN_METRIC_FIELDS = (
+    "tss",             # Training Stress Score
+    "ngp",             # Normalized Graded Pace (min/km)
+    "power_avg_w",     # Average running power (watts)
+    "power_np_w",      # Normalized power (watts)
+    "gct_ms",          # Ground contact time (milliseconds)
+    "vertical_osc_cm", # Vertical oscillation (cm)
+    "epoc",            # Excess post-exercise oxygen consumption
+    "pte",             # Peak Training Effect
+    "cadence_avg",     # Average cadence (steps/min)
+    "cadence_max",     # Max cadence (steps/min)
+    "stride_length_cm",# Average stride length (cm)
+    "recovery_hr_drop",# HR drop in first minute after stopping (bpm)
+    "vo2max_est",      # Estimated VO2 max
+    "recovery_time_h", # Device-recommended recovery time (hours)
+    "temp_c",          # Ambient temperature (°C)
+    "zone_breakdown",  # dict: {"Z1": pct, "Z2": pct, ...}
+    "hr_avg",          # Average HR (bpm)
+    "hr_max",          # Max HR this run (bpm)
+)
+
+
+def run_summary(root: "Path", person_id: str, n: int = 5) -> list[dict[str, Any]]:
+    """Return last N runs with trend deltas for key metrics.
+
+    Each entry includes the workout dict plus optional delta fields:
+    pace_delta_s, hr_delta, tss_delta, vo2max_delta (vs previous run).
+    """
+    try:
+        from pathlib import Path as _Path
+        profile = load_profile(root, person_id)
+    except Exception:
+        return []
+
+    runs = sorted(
+        [w for w in (profile.get("workouts") or []) if w.get("type") == "run"],
+        key=lambda w: str(w.get("date", "")),
+    )
+    recent = runs[-n:] if len(runs) > n else runs
+
+    result = []
+    for i, run in enumerate(recent):
+        entry = dict(run)
+        prev = recent[i - 1] if i > 0 else None
+
+        # Pace in seconds/km — prefer stored pace_min_km, fall back to duration/distance
+        def _pace_s(w: dict[str, Any]) -> float | None:
+            if w.get("pace_min_km") is not None:
+                try:
+                    return float(w["pace_min_km"]) * 60
+                except (TypeError, ValueError):
+                    pass
+            dur = w.get("duration_min")
+            dist = w.get("distance_km")
+            if dur and dist and float(dist) > 0:
+                return float(dur) * 60 / float(dist)
+            return None
+
+        if prev:
+            cur_pace = _pace_s(run)
+            prv_pace = _pace_s(prev)
+            if cur_pace is not None and prv_pace is not None:
+                entry["pace_delta_s"] = round(cur_pace - prv_pace, 1)  # negative = faster
+
+            for field in ("hr_avg", "tss", "vo2max_est"):
+                cur_v = run.get(field)
+                prv_v = prev.get(field)
+                if cur_v is not None and prv_v is not None:
+                    try:
+                        entry[f"{field}_delta"] = round(float(cur_v) - float(prv_v), 2)
+                    except (TypeError, ValueError):
+                        pass
+
+        result.append(entry)
+
+    return result
 
 
 def _parse_sessions_per_week(available: str) -> tuple[int, int]:

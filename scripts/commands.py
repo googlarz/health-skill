@@ -1517,6 +1517,26 @@ def build_parser() -> argparse.ArgumentParser:
     workout_plan.add_argument("--injuries", default="")
     workout_plan.set_defaults(func=command_workout_plan)
 
+    run_summary_parser = subparsers.add_parser("run-summary", help="Show last N run metrics with trends")
+    run_summary_parser.add_argument("--root", required=True)
+    run_summary_parser.add_argument("--person-id", default="")
+    run_summary_parser.add_argument("--n", type=int, default=5, help="Number of recent runs to show (default: 5)")
+    run_summary_parser.set_defaults(func=_command_run_summary)
+
+    log_intervention_parser = subparsers.add_parser("log-intervention", help="Add or update a named intervention")
+    log_intervention_parser.add_argument("--root", required=True)
+    log_intervention_parser.add_argument("--person-id", default="")
+    log_intervention_parser.add_argument("--name", required=True, help="Short label, e.g. 'time-restricted eating'")
+    log_intervention_parser.add_argument("--start-date", required=True, help="ISO date, e.g. 2025-01-15")
+    log_intervention_parser.add_argument("--protocol", required=True, help="What you are doing")
+    log_intervention_parser.add_argument("--outcome-metric", required=True, help="What to track, e.g. 'weight_kg'")
+    log_intervention_parser.set_defaults(func=_command_log_intervention)
+
+    intervention_status_parser = subparsers.add_parser("intervention-status", help="Show active interventions and progress")
+    intervention_status_parser.add_argument("--root", required=True)
+    intervention_status_parser.add_argument("--person-id", default="")
+    intervention_status_parser.set_defaults(func=_command_intervention_status)
+
     # v1.7: Longevity companion commands
     onboard_parser = subparsers.add_parser("onboard", help="Generate the welcome/onboarding message")
     onboard_parser.add_argument("--root", required=True)
@@ -2188,6 +2208,89 @@ def _command_mens_health(args: argparse.Namespace) -> int:
     out_path = Path(root) / (args.person_id or "") / "MENS_HEALTH.md"
     atomic_write_text(out_path, text)
     print(text)
+    return 0
+
+
+def _command_run_summary(args: argparse.Namespace) -> int:
+    try:
+        from .training import run_summary
+    except ImportError:
+        from training import run_summary  # type: ignore
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    runs = run_summary(root, args.person_id, n=args.n)
+    if not runs:
+        print("No run workouts logged yet.")
+        return 0
+    for r in runs:
+        date_s = r.get("date", "?")
+        dist = r.get("distance_km")
+        pace = r.get("pace_min_km")
+        hr = r.get("hr_avg")
+        tss = r.get("tss")
+        vo2 = r.get("vo2max_est")
+        parts = [f"  {date_s}"]
+        if dist:
+            parts.append(f"{dist:.1f} km")
+        if pace:
+            m, s = divmod(int(pace * 60), 60)
+            parts.append(f"{m}:{s:02d}/km")
+        if hr:
+            parts.append(f"HR {hr:.0f}")
+        if tss:
+            parts.append(f"TSS {tss:.0f}")
+        if vo2:
+            parts.append(f"VO2max≈{vo2:.1f}")
+        # deltas
+        for key, label in [("pace_delta_s", "Δpace"), ("hr_avg_delta", "ΔHR"),
+                            ("tss_delta", "ΔTSS"), ("vo2max_est_delta", "ΔVO2")]:
+            v = r.get(key)
+            if v is not None:
+                sign = "+" if v > 0 else ""
+                parts.append(f"{label} {sign}{v:.1f}")
+        print("  |  ".join(parts))
+    return 0
+
+
+def _command_log_intervention(args: argparse.Namespace) -> int:
+    try:
+        from .care_workspace import log_intervention
+    except ImportError:
+        from care_workspace import log_intervention  # type: ignore
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    record = log_intervention(
+        root, args.person_id,
+        name=args.name,
+        start_date=args.start_date,
+        protocol=args.protocol,
+        outcome_metric=args.outcome_metric,
+    )
+    print(f"Logged intervention: {record['name']} (started {record['start_date']})")
+    print(f"  Protocol: {record['protocol']}")
+    print(f"  Tracking: {record['outcome_metric']}")
+    return 0
+
+
+def _command_intervention_status(args: argparse.Namespace) -> int:
+    try:
+        from .care_workspace import intervention_status
+    except ImportError:
+        from care_workspace import intervention_status  # type: ignore
+    root = Path(args.root)
+    ensure_person(root, args.person_id)
+    items = intervention_status(root, args.person_id)
+    if not items:
+        print("No interventions logged. Use 'log-intervention' to start tracking one.")
+        return 0
+    for iv in items:
+        days = iv.get("days_running")
+        days_s = f"{days}d" if days is not None else "?"
+        latest = iv.get("latest_value")
+        latest_s = f"  latest {iv['outcome_metric']}: {latest}" if latest is not None else ""
+        status = iv.get("status", "active")
+        print(f"  [{status}] {iv['name']} — {days_s} running{latest_s}")
+        print(f"    Protocol: {iv['protocol']}")
     return 0
 
 
