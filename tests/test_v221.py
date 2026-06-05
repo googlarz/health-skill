@@ -307,3 +307,92 @@ class CLIWiringV221Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Greeting / hi command tests
+# ---------------------------------------------------------------------------
+
+class GreetingTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        ensure_person(self.root, "p1", name="Anna")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp)
+
+    def _save(self, profile):
+        save_profile(self.root, "p1", profile)
+
+    def test_fresh_workspace_default_opener(self):
+        from scripts.greeting import build_greeting
+        g = build_greeting(self.root, "p1")
+        self.assertIn("Anna", g)
+        self.assertTrue(g.endswith("?"))
+
+    def test_high_pain_takes_priority(self):
+        from scripts.greeting import build_greeting
+        from datetime import timedelta
+        p = load_profile(self.root, "p1")
+        p["daily_checkins"] = [
+            {"date": str(date.today() - timedelta(days=i)), "pain": 8.0,
+             "mood": 6, "sleep_hours": 7, "energy": 5}
+            for i in range(5)
+        ]
+        self._save(p)
+        g = build_greeting(self.root, "p1")
+        self.assertIn("pain", g.lower())
+
+    def test_stale_checkin_mentions_gap(self):
+        from scripts.greeting import build_greeting
+        from datetime import timedelta
+        p = load_profile(self.root, "p1")
+        p["daily_checkins"] = [
+            {"date": str(date.today() - timedelta(days=7)),
+             "mood": 7, "sleep_hours": 6.0, "energy": 6, "pain": 1}
+        ]
+        self._save(p)
+        g = build_greeting(self.root, "p1")
+        self.assertIn("days", g.lower())
+
+    def test_active_intervention_mentioned(self):
+        from scripts.greeting import build_greeting
+        from datetime import timedelta
+        p = load_profile(self.root, "p1")
+        p["interventions"] = [{
+            "name": "zone2 training", "start_date": str(date.today() - timedelta(days=10)),
+            "protocol": "3x/week", "outcome_metric": "rhr", "status": "active"
+        }]
+        self._save(p)
+        g = build_greeting(self.root, "p1")
+        self.assertIn("zone2", g.lower())
+
+    def test_burnout_signal_detected(self):
+        from scripts.greeting import build_greeting
+        from datetime import timedelta
+        p = load_profile(self.root, "p1")
+        p["daily_checkins"] = [
+            {"date": str(date.today() - timedelta(days=i)),
+             "mood": 3.0, "energy": 2.5, "sleep_hours": 6, "pain": 1}
+            for i in range(10)
+        ]
+        self._save(p)
+        g = build_greeting(self.root, "p1")
+        self.assertIn("?", g)
+        self.assertTrue(
+            any(w in g.lower() for w in ["mood", "energy", "going on", "lower"]),
+            f"Expected burnout language, got: {g}"
+        )
+
+    def test_hi_hello_hey_commands_wired(self):
+        from scripts.commands import build_parser
+        choices = build_parser()._subparsers._group_actions[0].choices
+        for cmd in ("hi", "hello", "hey"):
+            self.assertIn(cmd, choices, f"missing command: {cmd}")
+
+    def test_greeting_ends_with_question(self):
+        from scripts.greeting import build_greeting
+        g = build_greeting(self.root, "p1")
+        self.assertTrue(g.strip().endswith("?"), f"Greeting should end with question: {g}")

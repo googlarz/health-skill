@@ -108,6 +108,7 @@ try:
     from .post_visit import extract_visit_data, merge_visit_data, write_post_visit_summary
     from .mens_health import build_mens_health_report
     from .html_report import write_html_report
+    from .greeting import build_greeting
     from .household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -241,6 +242,7 @@ except ImportError:
     from post_visit import extract_visit_data, merge_visit_data, write_post_visit_summary  # type: ignore
     from mens_health import build_mens_health_report  # type: ignore
     from html_report import write_html_report  # type: ignore
+    from greeting import build_greeting  # type: ignore
     from household import (
         add_member as hh_add_member,
         add_relationship as hh_add_rel,
@@ -1618,6 +1620,12 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--person-id", default="")
     status_parser.set_defaults(func=_command_status)
 
+    for _hi_alias in ("hi", "hello", "hey"):
+        _hi_p = subparsers.add_parser(_hi_alias, help="Conversational check-in — starts a health conversation")
+        _hi_p.add_argument("--root", default=None)
+        _hi_p.add_argument("--person-id", default="")
+        _hi_p.set_defaults(func=_command_hi)
+
     add_goal_parser = subparsers.add_parser("add-goal", help="Add a longevity goal")
     add_goal_parser.add_argument("--root", default=None)
     add_goal_parser.add_argument("--person-id", default="")
@@ -2067,6 +2075,14 @@ def _command_status(args: argparse.Namespace) -> int:
     if env_hint:
         print(env_hint, end="")
     print(f"{bar}")
+    return 0
+
+
+def _command_hi(args: argparse.Namespace) -> int:
+    root = _resolve_root(args)
+    ensure_person(root, args.person_id)
+    greeting = build_greeting(root, args.person_id)
+    print(greeting)
     return 0
 
 
