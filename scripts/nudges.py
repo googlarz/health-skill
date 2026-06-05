@@ -314,14 +314,60 @@ def _pattern_alerts(
     return alerts
 
 
+_NUDGE_COMMANDS = {
+    "follow-up": "resolve-review-item --root .",
+    "check-in": "daily-checkin --root .",
+    "review": "list-review-queue --root .",
+    "conflict": "list-conflicts --root .",
+    "inbox": "process-inbox --root .",
+    "ldl": "lab-range --root . --marker LDL",
+    "hdl": "lab-range --root . --marker HDL",
+    "a1c": "lab-range --root . --marker A1C",
+    "tsh": "lab-range --root . --marker TSH",
+    "cholesterol": "lab-range --root . --marker 'Total Cholesterol'",
+    "sleep": "daily-checkin --root .",
+    "pain": "triage --root .",
+    "burnout": "mental-health --root .",
+    "blood pressure": "record-vital --root . --metric blood_pressure",
+    "weight": "record-weight --root .",
+}
+
+
+def _nudge_command(title: str) -> str | None:
+    t = title.lower()
+    for keyword, cmd in _NUDGE_COMMANDS.items():
+        if keyword in t:
+            return cmd
+    return None
+
+
 def render_nudges_md(nudges: list[dict[str, Any]]) -> str:
+    today = date.today()
     if not nudges:
         return (
             "# Nudges\n\n"
+            "---\n"
+            f"generated: {today.isoformat()}\n"
+            "high: 0\nmedium: 0\nlow: 0\ntotal: 0\n"
+            "---\n\n"
             "Nothing urgent right now. Workspace looks clean. ✓\n\n"
-            "_Generated " + date.today().isoformat() + "_\n"
+            f"_Generated {today.isoformat()}_\n"
         )
-    lines = ["# Nudges\n"]
+    high = sum(1 for n in nudges if n.get("priority") == "high")
+    medium = sum(1 for n in nudges if n.get("priority") == "medium")
+    low = sum(1 for n in nudges if n.get("priority") == "low")
+    lines = [
+        "# Nudges",
+        "",
+        "---",
+        f"generated: {today.isoformat()}",
+        f"high: {high}",
+        f"medium: {medium}",
+        f"low: {low}",
+        f"total: {len(nudges)}",
+        "---",
+        "",
+    ]
     icons = {"high": "🔴", "medium": "🟡", "low": "⚪"}
     for n in nudges:
         icon = icons.get(n["priority"], "·")
@@ -330,8 +376,11 @@ def render_nudges_md(nudges: list[dict[str, Any]]) -> str:
         lines.append(n["detail"])
         if n.get("action"):
             lines.append(f"\n**Suggested:** {n['action']}")
+        cmd = _nudge_command(n["title"])
+        if cmd:
+            lines.append(f"\n  **Run:** `{cmd}`")
         lines.append("")
-    lines.append(f"\n_Generated {date.today().isoformat()}_")
+    lines.append(f"\n_Generated {today.isoformat()}_")
     return "\n".join(lines) + "\n"
 
 

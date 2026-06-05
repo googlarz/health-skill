@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -410,33 +411,66 @@ def check_interactions(profile: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def render_interactions_text(profile: dict[str, Any]) -> str:
+    today = date.today().isoformat()
     alerts = check_interactions(profile)
     if not alerts:
         return (
             "# Medication Interactions\n\n"
+            f"---\ngenerated: {today}\nmajor: 0\nmoderate: 0\ninformational: 0\n---\n\n"
             "✅ No significant drug-drug or drug-condition interactions detected "
             "in your current medication list.\n\n"
             "_Note: This check covers common clinically significant interactions. "
             "Always confirm with your pharmacist or prescriber._\n"
         )
 
-    lines = ["# Medication & Supplement Interactions\n"]
-    lines.append(f"Found **{len(alerts)}** interaction(s) to review:\n")
+    # Sort: critical/major first, then moderate, then minor/informational
+    _sev_order = {"critical": 0, "major": 1, "moderate": 2}
+    alerts = sorted(alerts, key=lambda a: _sev_order.get(a["severity"], 3))
+
+    major_count = sum(1 for a in alerts if a["severity"] in ("critical", "major"))
+    moderate_count = sum(1 for a in alerts if a["severity"] == "moderate")
+    info_count = sum(1 for a in alerts if a["severity"] not in ("critical", "major", "moderate"))
+
+    lines = [
+        "# Medication & Supplement Interactions",
+        "",
+        "---",
+        f"generated: {today}",
+        f"major: {major_count}",
+        f"moderate: {moderate_count}",
+        f"informational: {info_count}",
+        "---",
+        "",
+        f"Found **{len(alerts)}** interaction(s) to review:",
+        "",
+        f"## Summary",
+        f"🔴 {major_count} major  •  🟡 {moderate_count} moderate  •  ⚪ {info_count} informational",
+        "",
+    ]
 
     icons = {"critical": "🔴", "major": "🟠", "moderate": "🟡"}
     type_labels = {"drug-drug": "Drug–Drug", "supplement-drug": "Supplement–Drug", "drug-condition": "Drug–Condition"}
+    prev_sev_group = None
     for a in alerts:
+        cur_group = "major" if a["severity"] in ("critical", "major") else a["severity"]
+        if prev_sev_group is not None and cur_group != prev_sev_group:
+            lines.append("---")
+            lines.append("")
+        prev_sev_group = cur_group
         icon = icons.get(a["severity"], "⚪")
         label = type_labels.get(a["type"], "")
-        lines.append(f"## {icon} {a['severity'].upper()} ({label}): {' + '.join(a['drugs'])}\n")
-        lines.append(f"**Effect:** {a['effect']}\n")
-        lines.append(f"**What to do:** {a['action']}\n")
-        if a.get("mechanism"):
-            lines.append(f"**Why it happens:** {a['mechanism']}\n")
+        lines.append(f"## {icon} {a['severity'].upper()} ({label}): {' + '.join(a['drugs'])}")
         lines.append("")
+        lines.append(f"**Effect:** {a['effect']}")
+        lines.append("")
+        lines.append(f"**What to do:** {a['action']}")
+        lines.append("")
+        if a.get("mechanism"):
+            lines.append(f"**Why it happens:** {a['mechanism']}")
+            lines.append("")
 
     lines.append(
         "_This check covers common clinically significant interactions. "
-        "Always confirm with your pharmacist or prescriber before making changes._\n"
+        "Always confirm with your pharmacist or prescriber before making changes._"
     )
     return "\n".join(lines)

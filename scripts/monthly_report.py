@@ -91,8 +91,14 @@ def build_monthly_report(profile: dict[str, Any], root: Path, person_id: str) ->
     month_checkins = _checkins_in_range(checkins, start, today)
     prev_checkins = _checkins_in_range(checkins, prev_start, start)
 
+    period_label = today.strftime("%B %Y")
     lines = [
-        f"# Monthly Report — {today.strftime('%B %Y')}",
+        "---",
+        f"generated: {today.isoformat()}",
+        f"period: {period_label}",
+        "---",
+        "",
+        f"# Monthly Report — {period_label}",
         "",
         f"_Period: {start.isoformat()} → {today.isoformat()} · {len(month_checkins)} check-ins logged_",
         "",

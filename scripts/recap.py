@@ -57,19 +57,69 @@ def build_recap(root: Path, person_id: str, days: int = 7) -> str:
     cutoff = today - timedelta(days=days)
     name = p.get("name") or "You"
 
-    lines: list[str] = []
-    lines.append(f"# Weekly Recap — {name}")
-    lines.append("")
-    lines.append(f"_Window: {cutoff.isoformat()} → {today.isoformat()}_")
-    lines.append("")
-
-    # Check-ins
+    # Check-ins (computed early so headline can use them)
     checkins = []
     for c in p.get("daily_checkins", []):
         d = _parse_date(c.get("date", ""))
         if d and d >= cutoff:
             checkins.append(c)
     checkins.sort(key=lambda c: str(c.get("date", "")))
+
+    # Build headline: find best day
+    headline = ""
+    if checkins:
+        best_day = None
+        best_score = -1.0
+        for c in checkins:
+            mood = c.get("mood")
+            energy = c.get("energy")
+            sleep = c.get("sleep_hours")
+            score = 0.0
+            count = 0
+            if isinstance(mood, (int, float)):
+                score += float(mood)
+                count += 1
+            if isinstance(energy, (int, float)):
+                score += float(energy)
+                count += 1
+            if count > 0 and score / count > best_score:
+                best_score = score / count
+                best_day = c
+        if best_day:
+            day_name = ""
+            bd = _parse_date(best_day.get("date", ""))
+            if bd:
+                day_name = bd.strftime("%A")
+            parts = []
+            if isinstance(best_day.get("mood"), (int, float)):
+                parts.append(f"mood {best_day['mood']}")
+            if isinstance(best_day.get("energy"), (int, float)):
+                parts.append(f"energy {best_day['energy']}")
+            if isinstance(best_day.get("sleep_hours"), (int, float)):
+                parts.append(f"slept {best_day['sleep_hours']}h")
+            if parts:
+                headline = f"Best day: {day_name} ({', '.join(parts)})"
+
+    # Date range label
+    start_label = cutoff.strftime("%-d")
+    end_label = today.strftime("%-d")
+    month_label = today.strftime("%b %Y")
+    if cutoff.month != today.month:
+        start_label = cutoff.strftime("%b %-d")
+        end_label = today.strftime("%b %-d, %Y")
+        month_label = ""
+
+    lines: list[str] = []
+    period = f"{start_label}–{end_label}{', ' + month_label if month_label else ''}"
+    lines.append(f"# Weekly Recap — {period}")
+    lines.append("")
+    if headline:
+        lines.append(f"> {headline}")
+        lines.append("")
+    lines.append(f"_Window: {cutoff.isoformat()} → {today.isoformat()}_")
+    lines.append("")
+    lines.append("## This week at a glance")
+    lines.append("")
 
     lines.append("## How you've felt")
     lines.append("")
@@ -160,6 +210,36 @@ def build_recap(root: Path, person_id: str, days: int = 7) -> str:
     lines.append("")
 
     lines.append(f"_Generated {today.isoformat()}_")
+
+    # One thing to focus on — based on worst metric
+    lines.append("")
+    lines.append("## One thing to focus on this week")
+    lines.append("")
+    focus = ""
+    if checkins:
+        moods_all = [float(c["mood"]) for c in checkins if isinstance(c.get("mood"), (int, float))]
+        sleeps_all = [float(c["sleep_hours"]) for c in checkins if isinstance(c.get("sleep_hours"), (int, float))]
+        energies_all = [float(c["energy"]) for c in checkins if isinstance(c.get("energy"), (int, float))]
+        pains_all = [float(c["pain_severity"]) for c in checkins if isinstance(c.get("pain_severity"), (int, float))]
+        if pains_all and (_mean(pains_all) or 0) > 4:
+            focus = f"Pain averaging {_mean(pains_all):.1f}/10 — consider running `triage --root .`"
+        elif moods_all and (_mean(moods_all) or 10) < 5:
+            focus = f"Mood averaging {_mean(moods_all):.1f}/10 — worth logging how you're feeling daily"
+        elif sleeps_all and (_mean(sleeps_all) or 8) < 6:
+            focus = f"Sleep averaging {_mean(sleeps_all):.1f}h — try logging sleep patterns with `daily-checkin`"
+        elif energies_all and (_mean(energies_all) or 10) < 4:
+            focus = f"Energy averaging {_mean(energies_all):.1f}/10 — check in daily to track recovery"
+    if not focus:
+        overdue_focus = [f for f in p.get("follow_ups", [])
+                         if f.get("status") != "completed" and _parse_date(f.get("due_date", ""))
+                         and (_parse_date(f["due_date"]) or today) < today]  # type: ignore[operator]
+        if overdue_focus:
+            focus = f"You have {len(overdue_focus)} overdue follow-up(s) — start with: {overdue_focus[0].get('task', 'follow-up')}"
+        else:
+            focus = "Keep the streak going — consistency compounds."
+    lines.append(f"- {focus}")
+    lines.append("")
+
     return "\n".join(lines) + "\n"
 
 

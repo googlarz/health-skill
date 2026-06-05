@@ -22,7 +22,7 @@ MOOD_ADJECTIVES = {
     "ok": 5, "okay": 5, "fine": 5, "alright": 5,
     "decent": 6,
     "good": 7, "happy": 7, "positive": 7,
-    "great": 9, "excellent": 9, "amazing": 9, "wonderful": 9,
+    "great": 9, "excellent": 9, "amazing": 9, "wonderful": 9, "fantastic": 9,
 }
 
 PAIN_WORDS = {
@@ -122,6 +122,9 @@ def parse_checkin(text: str) -> dict[str, Any]:
         if 0 <= val <= 10:
             result["energy"] = int(val) if val.is_integer() else val
             consume(m)
+    elif re.search(r"\b(?:tired|exhausted|no energy)\b", t):
+        if "energy" not in result:
+            result["energy"] = 2
 
     # Stress: "stress 6" or "stressed 7"
     m = re.search(r"\bstress(?:ed)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:/\s*10)?", t)
@@ -130,18 +133,31 @@ def parse_checkin(text: str) -> dict[str, Any]:
         if 0 <= val <= 10:
             result["stress"] = int(val) if val.is_integer() else val
             consume(m)
-    elif "stressed" in t or "stress" in t:
-        result["stress"] = 7
+    elif re.search(r"\b(?:stressed|anxious|overwhelmed)\b", t):
+        if "stress" not in result:
+            result["stress"] = 7
+    elif re.search(r"\b(?:calm|relaxed|at ease)\b", t):
+        if "stress" not in result:
+            result["stress"] = 2
 
-    # Sleep hours: "slept 6 hours", "6 hours sleep", "sleep: 7h"
+    # Sleep hours: "slept 6 hours", "6 hours sleep", "sleep: 7h", "7 hours of sleep", "7hrs sleep"
     m = re.search(r"\bslept\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b", t)
     if not m:
         m = re.search(r"\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\s+(?:of\s+)?sleep\b", t)
+    if not m:
+        m = re.search(r"\b(\d+(?:\.\d+)?)\s*(?:hrs?|h)\s+sleep\b", t)
     if not m:
         m = re.search(r"\bsleep\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)?\b", t)
     if m:
         result["sleep_hours"] = float(m.group(1))
         consume(m)
+    # Natural sleep phrases (no numeric)
+    elif re.search(r"\b(?:can't sleep|insomnia|barely slept)\b", t):
+        if "sleep_hours" not in result:
+            result["sleep_hours"] = 3.5
+    elif re.search(r"\b(?:slept well|great sleep|solid sleep)\b", t):
+        if "sleep_hours" not in result:
+            result["sleep_hours"] = 8
 
     # Sleep quality
     for phrase, q in SLEEP_QUALITY_WORDS.items():
@@ -180,6 +196,13 @@ def parse_checkin(text: str) -> dict[str, Any]:
             consume(m)
     if pain_locs:
         result["pain_locations"] = pain_locs
+    # Natural pain phrases (no numeric)
+    if re.search(r"\b(?:no pain|pain.free|feeling good)\b", t):
+        if "pain_severity" not in result:
+            result["pain_severity"] = 0
+    elif re.search(r"\b(?:bad pain|lot of pain|lots of pain|hurting)\b", t):
+        if "pain_severity" not in result:
+            result["pain_severity"] = 7
 
     # Appetite
     for phrase, a in APPETITE_WORDS.items():
