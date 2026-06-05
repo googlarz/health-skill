@@ -17,7 +17,62 @@
 
 Most health conversations with AI start from scratch. Health Skill gives Claude a **persistent workspace** that connects your labs to your medications, your sleep to your pain, your family history to your screening schedule — so every conversation builds on the last.
 
-It's also a **daily longevity companion**: log check-ins, track your cycle, design training plans, monitor preventive care, sync your watch automatically, and discover patterns across your entire health picture.
+<p align="center">
+  <img src="demo/demo.gif" alt="Health Skill demo — hi, status, and explain-lab" width="780">
+</p>
+
+---
+
+> 🔒 **Local-first and private.** Your health data lives on your machine and is never sent to any server. No accounts, no cloud sync, no telemetry. You own everything.
+
+---
+
+## Quick start
+
+```bash
+# 1. Install
+git clone https://github.com/googlarz/health-skill.git ~/.claude/skills/health-skill
+
+# 2. Create your workspace
+python3 ~/.claude/skills/health-skill/scripts/care_workspace.py init-project \
+  --root ~/Health/me --name "Your Name"
+
+# 3. Set your root once, never type --root again
+export HEALTH_ROOT=~/Health/me   # add to ~/.zshrc to make permanent
+
+# 4. Say hi
+hi
+```
+
+That's it. Drop lab PDFs or visit notes into `~/Health/me/inbox/` and tell Claude to process them.
+
+---
+
+## Why Health Skill vs the alternatives?
+
+| | Health Skill | Copilot Health | Apple Health | ChatGPT |
+|---|:---:|:---:|:---:|:---:|
+| **Data stays on your machine** | ✅ | ❌ cloud | ❌ cloud | ❌ cloud |
+| **Cross-session memory** | ✅ | ✅ | ❌ | ❌ |
+| **Drug + supplement interactions** | ✅ | ❌ | ❌ | ❌ |
+| **Appointment prep & clinician packet** | ✅ | ✅ | ❌ | ❌ |
+| **Run / training metrics** | ✅ | ❌ | ✅ | ❌ |
+| **Intervention tracker** | ✅ | ❌ | ❌ | ❌ |
+| **Pharmacogenomics (23andMe)** | ✅ | ❌ | ❌ | ❌ |
+| **Household / caregiver mode** | ✅ | ❌ | ❌ | ❌ |
+| **Free & open source** | ✅ | ❌ subscription | ✅ | freemium |
+| **Programmable / extensible** | ✅ | ❌ | ❌ | ❌ |
+| **Geography / age restrictions** | None | US, 18+, M365 | None | None |
+
+---
+
+## How it works
+
+1. **Your data lives in a local folder** — a JSON profile, a SQLite vitals database, and markdown notes. No cloud, no sync, no account.
+2. **Claude reads it at session start** — the skill loads your dossier automatically, so every conversation has full context.
+3. **`hi` opens the conversation** — the skill reads your workspace, picks the one thing that matters most right now, and asks you about it.
+
+---
 
 ## Contents
 

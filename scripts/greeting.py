@@ -50,8 +50,12 @@ def build_greeting(root: Path, person_id: str) -> str:
         major = [a for a in alerts if a.get("severity") == "major"]
         if major:
             item = major[0]
-            drug_a = item.get("drug_a") or item.get("supplement") or "one of your supplements"
-            drug_b = item.get("drug_b") or item.get("medication") or "a medication"
+            drugs = item.get("drugs") or []
+            if len(drugs) >= 2:
+                drug_a, drug_b = drugs[0], drugs[1]
+            else:
+                drug_a = item.get("drug_a") or item.get("supplement") or "one of your supplements"
+                drug_b = item.get("drug_b") or item.get("medication") or "a medication"
             return (
                 f"{hi} Before anything else — I flagged a potential major interaction "
                 f"between {drug_a} and {drug_b}. "
