@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-258%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-265%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.2.1-purple" alt="v2.2.1">
+    <img src="https://img.shields.io/badge/version-2.3-purple" alt="v2.3">
   </p>
 </p>
 
@@ -26,8 +26,7 @@ It's also a **daily longevity companion**: log check-ins, track your cycle, desi
 - [Setup for Claude Code](#setup-for-claude-code)
 - [What You Get](#what-you-get)
 - [Key Features](#key-features)
-- [Longevity Companion (v1.7)](#longevity-companion-v17)
-- [What's new in v1.8](#whats-new-in-v18)
+- [Recent Releases](#recent-releases)
 - [Who This Is For](#who-this-is-for)
 - [What It Is Not](#what-it-is-not)
 - [Documentation](#documentation)
@@ -233,23 +232,26 @@ Always read HEALTH_DOSSIER.md before answering health questions.
 
 ### CLI Quick Reference
 
+> **Tip:** Set `export HEALTH_ROOT=~/Health/me` once in your shell profile and drop `--root .` from every command.
+
 | I want to... | Command |
 |---|---|
+| **Start a health conversation** | `hi` · `hello` · `hey` |
+| **See what needs attention** | `status` |
 | Set up a new person folder | `init-project --root . --name "Name"` |
 | Run onboarding | `onboard --root .` |
 | Process new documents | Drop into `inbox/`, then `process-inbox --root .` |
-| See what's important now | Open `TODAY.md` or `HEALTH_HOME.md` |
 | Prepare for an appointment | `query-dashboard --root . --query "visit prep"` |
 | Ask a health question | `query-dashboard --root . --query "your question"` |
-| Log a daily check-in (full) | `daily-checkin --root . --note "mood 8, slept 7h, energy good"` |
-| Log a daily check-in (shorthand) | `daily-checkin --root . --note "m8 s7 e7 p2"` |
-| Log a workout | `workout-log --root . --type strength --duration 45 --notes "squats, deadlifts"` |
+| Log a daily check-in | `daily-checkin --root . --note "mood 8, slept 7h, energy good"` |
+| Log a workout | `log-workout --root . --type strength --duration 45 --notes "squats, deadlifts"` |
 | Generate a training plan | `workout-plan --root . --goals "build strength" --days 3` |
+| Run metrics summary | `run-summary --root . --n 5` |
 | Log a screening | `screening-log --root . --name mammogram --date 2024-06-01` |
 | See overdue screenings | `preventive-check --root .` |
 | Discover cross-domain patterns | `connections --root .` |
 | **Get proactive nudges** | `nudges --root .` |
-| **Generate weekly recap** | `weekly-recap --root .` |
+| **Generate weekly recap** | `weekly-recap --root . --days 7` |
 | **Set a longevity goal** | `add-goal --root . --title "LDL under 130" --metric ldl --target 130` |
 | **Show goals & progress** | `goals --root .` |
 | **Add a care-team provider** | `add-provider --root . --name "Dr Smith" --role pcp` |
@@ -263,13 +265,15 @@ Always read HEALTH_DOSSIER.md before answering health questions.
 | **Auto-sync wearable inbox** | `sync-wearable --root .` |
 | **Add household member** | `household-add-member --root . --id self --name "Anna" --folder anna` |
 | **Cascade family history** | `household-cascade --root .` |
-| Check extraction accuracy | `extraction-audit --root .` |
-| **Check drug interactions** | `check-interactions --root .` |
+| **Check drug & supplement interactions** | `check-interactions --root .` |
+| **Medication summary card** | `med-summary --root .` |
+| **Explain a lab result** | `explain-lab --root . --marker LDL --value 155` |
 | **Medication side-effect timeline** | `side-effects --root .` |
 | **Monthly insight report** | `monthly-report --root .` |
 | **Import FHIR from patient portal** | `import-fhir --root . --file inbox/fhir.json` |
 | **Mental health screen** | `mental-health --root .` |
-| **Personalised lab range** | `lab-range --root . --marker LDL --value 155` |
+| **Log an intervention** | `log-intervention --root . --name "16:8 fasting" --start-date 2025-01-15 --protocol "..." --outcome-metric weight_kg` |
+| **Intervention progress** | `intervention-status --root .` |
 
 See [docs/commands.md](docs/commands.md) for the full reference.
 
@@ -290,126 +294,82 @@ See [docs/commands.md](docs/commands.md) for the full reference.
 
 See [docs/files.md](docs/files.md) for the complete list.
 
+---
+
 ## Key Features
 
-**Query-relevant dashboards** — Ask any health question and get a focused view with only the relevant data, not the full dossier. Dashboards can be saved and reused for similar future queries.
+**👋 Conversational check-in (`hi`)** — Just say `hi`. The skill reads your workspace, picks the single most relevant thing going on right now, and opens a conversation around it. High pain this week? It asks. Active intervention? It checks in on your progress. Appointment tomorrow? It offers to prep. No dashboards, no lists — just the right question at the right time.
 
-**Trust-aware extraction** — Facts extracted from documents are labeled by confidence. OCR-derived data is flagged for review. You confirm what matters.
+```
+$ hi
 
-**Medication safety** — Adding a medication that conflicts with a known allergy triggers a warning automatically.
+Hey Anna! I noticed your pain has been averaging around 7/10 over
+the last week. How are you feeling today — any better, or still
+about the same?
+```
 
-**Pattern detection** — Connects labs to medications to follow-ups over time. Flags stale tests, temporal side-effect correlations, and overdue follow-ups.
+**🔍 Query-relevant dashboards** — Ask any health question and get a focused view with only the relevant data, not the full dossier. Dashboards are saved and reused for similar future queries.
 
-**Visual outputs** — Status chips (✅/⚠️), sparkline charts, trend arrows, and bold key numbers. Designed for scanning when tired or stressed.
+**💊 Drug & supplement interaction checker** — `check-interactions` scans your medications and supplements against 20+ drug–drug and 6 supplement–drug pairs. Alerts sorted major → moderate, each with mechanism and action. `med-summary` renders a medication card with interaction warnings per drug.
 
-**Caregiver dashboard** — One view across multiple person folders with urgency scoring and follow-up reminders.
+**🧪 Lab explanation** — `explain-lab --marker LDL --value 155` gives a plain-English 4-sentence interpretation personalised to your age, sex, conditions, and medications. Not a generic normal-range lookup — your context, your number.
 
-## What's new in v1.8
+**📐 Personalised lab ranges** — `lab-range` adjusts reference ranges for your conditions and medications: LDL target tightens with diabetes, TSH narrows on levothyroxine, haemoglobin adjusts by sex. Flags are green/amber/red against your range, not population averages.
 
-Thirteen new features across safety, clinical depth, ambient monitoring, equal coverage for men and women, and an interactive HTML dashboard.
+**🏃 Run metrics** — `run-summary` shows your last N runs with pace, HR, TSS, and VO2max deltas vs the prior run. Trend labels (`↑ pace improving`, `⚠ cardiac drift`) make the numbers readable at a glance.
 
-**Core safety & insights**
-- **💊 Drug-drug interaction checker** — `check-interactions` scans your full medication list against 20+ clinically significant interactions. Warfarin + ibuprofen, SSRIs + MAOIs, statins + clarithromycin, metformin + contrast dye, and more. Each alert includes mechanism, risk, and exactly what to do.
-- **🎯 Personalised lab reference ranges** — `lab-range` adjusts your LDL target for diabetes (→ <100), TSH for levothyroxine (→ 0.5–2.5), haemoglobin by sex, and dozens more condition × medication × sex combinations.
-- **📈 Medication side-effect timeline** — `side-effects` correlates medication start dates with your daily check-ins. Pain up 3 points after starting a statin? Sleep disrupted after an SSRI? Signal surfaces automatically.
-- **📅 Monthly insight report** — `monthly-report` produces a one-page 30-day summary: mood/sleep/energy/pain sparklines, training, labs, weight delta, and one action item.
-- **🏥 FHIR R4 import** — `import-fhir` pulls conditions, medications, allergies, immunisations, and observations directly from Epic MyChart, Cerner, and Apple Health Records exports.
-- **🧠 Mental health layer** — `mental-health` runs PHQ-2 (depression) and GAD-2 (anxiety) proxies from check-in data, plus a burnout detector. Includes crisis resources.
-- **🔔 Continuous pattern alerts** — integrated into `nudges`: chronic sleep deficit, sustained low mood + energy, consistently high pain, rapid weight gain.
+**🎯 Intervention tracker** — `log-intervention` tracks named lifestyle protocols (16:8 fasting, zone-2 training, cold exposure) with start date, protocol, outcome metric, and days running. `intervention-status` surfaces the latest tracked value.
 
-**Pharmacogenomics**
-- **🧬 23andMe / AncestryDNA integration** — `import-pgx` parses your raw genotype file and calls phenotypes for CYP2C19, CYP2D6, CYP2C9, SLCO1B1, VKORC1, MTHFR, and DPYD. `pgx-report` cross-references your current medications — clopidogrel + CYP2C19 poor metaboliser is a critical flag, statin + SLCO1B1 variant triggers myopathy warning.
+**🔔 Proactive nudges** — `nudges` scans for overdue follow-ups, stale labs, missed check-ins, conflicts, chronic sleep deficit, sustained low mood/energy, high pain streaks, non-dipping BP patterns, and rapid weight gain. Each nudge includes a copy-pasteable command to act on it.
 
-**Appointment workflow**
-- **📆 Appointment management** — `add-appointment` tracks upcoming visits. `pre-visit` auto-generates a structured brief: active conditions, medications, recent labs, recent check-in trends, and specialty-specific questions to ask your doctor.
-- **📝 Post-visit note processor** — `post-visit` parses free-text visit notes to extract new diagnoses, new medications, stopped medications, labs ordered, referrals, and follow-up intervals — then merges them into your profile automatically.
+**📈 Medication side-effect timeline** — `side-effects` correlates medication start dates with your daily check-ins. Pain up 3 points after starting a statin? Sleep disrupted after an SSRI? Signal surfaces automatically.
 
-**Men's health (equal depth to women's module)**
-- **♂ Men's health module** — `mens-health` provides equivalent depth to the menopause module: testosterone symptom scoring, T-level staging (normal / borderline / hypogonadism), PSA trend interpretation with age-adjusted thresholds and velocity flags, erectile dysfunction as cardiovascular sentinel, full male preventive care schedule (testicular self-exam, PSA, colorectal, AAA ultrasound), and male-specific CV risk framing.
+**🧠 Mental health layer** — `mental-health` runs PHQ-2 and GAD-2 proxies from check-in data plus a burnout detector. Includes crisis resources.
 
-**Interactive HTML dashboard**
-- **📊 Visual health dashboard** — `dashboard` generates a single self-contained `HEALTH_DASHBOARD.html` file you can open in any browser. Includes: 30-day KPI cards (mood, energy, sleep, pain with trend deltas), a 90-day daily trends line chart, weight timeline, lab results plotted against your personalised reference ranges (green = normal, red = out of range), active medications with duration, upcoming appointments, and condition badges. No server required — everything is embedded including Chart.js.
+**🧬 Pharmacogenomics** — `import-pgx` parses 23andMe/AncestryDNA raw files and calls CYP2C19, CYP2D6, CYP2C9, SLCO1B1, VKORC1, MTHFR, DPYD phenotypes. `pgx-report` flags your current medications against your genotype — clopidogrel + CYP2C19 poor metaboliser is a critical alert.
+
+**📊 Visual dashboard** — `dashboard` generates a self-contained HTML file: 30-day KPI cards, 90-day trend charts, weight timeline, labs plotted against your personalised ranges, active medications, appointments. No server needed.
+
+**👨‍👩‍👧 Household graph** — `household-add-member` + `household-cascade` push a parent's diagnosed condition into every connected member's family history automatically, adjusting their screening dates.
+
+**🔮 Forecasting** — `forecast` projects lab markers and weight forward 3–6 months using linear regression with 95% confidence intervals. "At this rate you hit your LDL goal by August."
+
+**🍽 Nutrition tracker** — `log-meal "chicken 200g, rice 1 cup, broccoli"` parses ~80 common foods into macros, aggregates 14-day trends, coaches on gaps.
+
+**⌚ Wearable sync** — drop Apple Health export or any CSV in `inbox/`, run `import-wearable`. Install the background watcher for daily auto-sync.
+
+**👪 Family-history-aware screening** — adding "Mom: breast cancer at 48" pulls mammogram start age forward to 38 automatically.
 
 ---
 
-## What's new in v2.0
+## Recent Releases
 
-The skill is no longer a filing cabinet — it predicts, recommends actions, supports decisions, and works for whole households.
+### v2.3 — Conversational UX overhaul
+- **`hi` / `hello` / `hey`** — context-aware greeting that opens with the one thing that matters most right now
+- **`status`** — one-glance workspace summary with nudge counts, last check-in, and quick actions
+- **`HEALTH_ROOT` env var** — set once, skip `--root .` forever
+- **`explain-lab`** — plain-English lab explanation personalised to your profile
+- **`med-summary`** — medication card with per-drug interaction warnings
+- **Natural language check-ins** — "exhausted", "can't sleep", "bad pain", "stressed" all parse correctly
+- **Friendly errors** — missing workspace, unknown path: clear hints instead of tracebacks
+- **Nudges with commands** — every nudge now includes a copy-pasteable action command
+- **Interaction urgency ranking** — alerts sorted major → moderate with summary header
+- **Run metrics trend labels** — `↑ pace improving`, `⚠ cardiac drift`, avg footer
+- **Weekly recap headline** — "best day" opener + "one thing to focus on" footer
+- **`--dry-run`** on `resolve-review-item` and `apply-review-tier`
+- **Command aliases** — `log-workout`, `log-checkin`, `interactions`, `meds`, `labs`
 
-- **🔮 Forecasting** — `forecast` projects each lab marker and weight forward 3–6 months using linear regression with 95% confidence intervals. "At this rate you hit your LDL goal by August."
-- **⚙️ Lab-to-action** — `lab-actions` turns every abnormal lab into a clinician question + lifestyle consideration + recheck cadence + drafted portal message. The loop from result to action becomes one click.
-- **🍽 Nutrition tracker** — `log-meal "chicken 200g, rice 1 cup, broccoli"` parses ~80 common foods into calories/protein/fiber/sodium, aggregates 14-day trends, coaches on gaps.
-- **🧭 Decision support** — `decide --topic hrt|statin|screening` produces structured shared-decision-making aids personalised to your data: pros, cons, what's missing, questions to bring.
-- **⌚ Live wearable sync** — `sync-wearable` processes everything in `inbox/wearable/`. Pair with the iOS Shortcut recipe in [`references/wearable-sync.md`](references/wearable-sync.md) for daily auto-sync from your Apple Watch.
-- **👨‍👩‍👧 Household / family graph** — `household-add-member` + `household-cascade` push a parent's diagnosed cancer or cardiac event into every connected member's family history automatically, which adjusts their preventive screening dates.
+### v2.2.1 — Clinical depth
+- Supplement–drug interaction checker (nattokinase, fish oil, vitamin K2, beetroot, hibiscus, omega-3)
+- Non-dipping BP pattern alert (nocturnal dip < 10% → cardiovascular risk flag)
+- Run metrics schema: TSS, NGP, power, GCT, vertical oscillation, EPOC, PTE, cadence, stride, VO2max
+- Intervention tracker: `log-intervention` + `intervention-status`
 
----
+### v2.0 — Whole-person health
+- Forecasting, lab-to-action, nutrition, decision support, live wearable sync, household graph
 
-**Previous features (also in v1.8)**
-
-- **📸 Photo input** — paste a posture photo, skin lesion, medication bottle, lab screenshot, or food photo. See [`references/photo-handling.md`](references/photo-handling.md) for the full protocol.
-- **🔔 Proactive nudges** — `nudges` scans the workspace for overdue items, stale labs, missed check-ins, open conflicts, and surfaces what to act on next.
-- **📅 Weekly recap** — `weekly-recap` summarises your last 7 days: mood/sleep/energy/pain trends, training volume, weight delta, and one thing to action.
-- **🎯 Goal tracking** — set quantified goals (LDL <130, deadlift 60kg, sleep 7+h) with `add-goal`. Baseline captured automatically; progress computed from your actual data.
-- **⌚ Wearable import** — drop Apple Health `export.xml` or any CSV in `inbox/`, run `import-wearable`. Imports steps, RHR, VO2 max, SpO2, weight, BP, sleep.
-- **👪 Family-history-aware screening** — adding "Mom: breast cancer at 48" pulls your mammogram start age forward to 38 automatically.
-- **🩺 Provider directory** — store your care team (PCP, gyno, cardio, PT, dentist) with `add-provider`.
-- **🧭 Structured triage** — describe a symptom, get walked through 5 questions, returns urgency band + red-flag detection + drafted clinician handoff.
-- **⚡ Shorthand check-ins** — `m7 s7 e6 p2` works as well as a sentence. Lower friction = more data.
-- **💡 Smart in-conversation suggestions** — Claude offers concrete next steps when you mention symptoms, sleep, new meds, family history, or goals.
-
----
-
-## Longevity Companion (v1.7)
-
-Health Skill isn't just for paperwork. It's a daily companion for people who want to stay healthy over the long term.
-
-### Daily check-ins
-
-Log how you feel in plain language. Claude parses it and stores structured data:
-
-```
-"mood 7, slept 6 hours, knee hurts 3/10, energy low"
-```
-
-Trends surface over time — sleep vs energy, pain vs training load, mood across the cycle.
-
-### Cycle tracking (opt-in)
-
-Log periods, symptoms, and cycle events. Claude predicts your next period, tracks cycle length, and connects cycle phase to mood and energy data if you log check-ins. Fully opt-in — set `track_cycles: true` in your profile.
-
-### Training plans
-
-Tell Claude your goals and constraints. It generates a weekly plan:
-
-```
-"fix my posture, 3 days a week, 30 minutes, bad lower back"
-```
-
-Plans are injury-aware and include progression. Log workouts with `workout-log`. PRs tracked automatically.
-
-### Menopause & hormonal health
-
-Health Skill has specific knowledge of perimenopause and menopause:
-
-- **HRT context** — explains estrogen, progesterone, and testosterone therapy options; connects HRT to labs (lipids, bone markers); flags when symptoms warrant a conversation with a clinician
-- **Symptom tracking** — hot flashes, sleep disruption, mood, joint pain, brain fog tracked in daily check-ins and connected to cycle data
-- **Exercise guidance** — recommends compound/strength training for bone density preservation, explains why resistance training matters more post-menopause than cardio alone
-- **Lab interpretation** — FSH, LH, estradiol, SHBG in context of where you are in the transition
-
-### Preventive care
-
-Tracks screenings by age and sex: mammogram, colonoscopy, bone density (DEXA), cervical cancer, blood pressure, cholesterol, diabetes, skin checks, eye exams, and more. Tells you what's overdue and when things are due next.
-
-### Cross-domain connections
-
-The connections engine looks across all your data and surfaces patterns you wouldn't notice manually:
-
-- Sleep quality → next-day pain level
-- Training frequency → resting heart rate trend
-- Cycle phase → mood and energy check-ins
-- LDL trend → exercise frequency correlation
-- Weight → sleep quality over time
+### v1.8 — Safety & clinical depth
+- Drug–drug interaction checker, personalised lab ranges, side-effect timeline, monthly report, FHIR import, mental health layer, continuous pattern alerts, pharmacogenomics, appointment workflow, men's health module, visual HTML dashboard
 
 ---
 
@@ -427,6 +387,8 @@ The connections engine looks across all your data and surfaces patterns you woul
 
 See [references/safety-protocol.md](references/safety-protocol.md) for the full safety model.
 
+---
+
 ## Documentation
 
 | Doc | Purpose |
@@ -440,7 +402,7 @@ See [references/safety-protocol.md](references/safety-protocol.md) for the full 
 ## Tests
 
 ```bash
-python3 -m unittest discover tests -v   # 110 tests, ~1.5s
+python3 -m pytest tests/ -q   # 265 tests, ~2s
 ```
 
 ## License
