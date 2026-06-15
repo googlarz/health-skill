@@ -162,6 +162,61 @@ SNP_DB: dict[str, dict[str, Any]] = {
     },
 }
 
+# Gene → list of rsIDs that define it (derived from SNP_DB). Used to detect whether
+# a gene was actually probed by the uploaded data.
+GENE_RSIDS: dict[str, list[str]] = {}
+for _rsid, _info in SNP_DB.items():
+    GENE_RSIDS.setdefault(_info["gene"], []).append(_rsid)
+
+def _is_real_call(gt: Any) -> bool:
+    """A usable diploid SNP call: exactly two A/C/G/T bases. Half-calls ('G-'), single
+    bases ('G'), and no-call sentinels ('--', '0', '00', 'NN', ...) are NOT real calls —
+    an untested allele must never be silently treated as reference."""
+    if not gt:
+        return False
+    g = str(gt).strip().upper()
+    return len(g) == 2 and g[0] in "ACGT" and g[1] in "ACGT"
+
+
+def _gene_has_coverage(variants: dict[str, str], gene: str) -> bool:
+    """True only if at least one of the gene's defining SNPs has a real (2-base) genotype."""
+    return any(_is_real_call(variants.get(rsid)) for rsid in GENE_RSIDS.get(gene, []))
+
+
+def _gene_fully_covered(variants: dict[str, str], gene: str) -> bool:
+    """True only if EVERY defining SNP for the gene has a real (non-no-call) genotype.
+
+    Per-allele coverage: a single benign companion call must not let an untested
+    risk allele (a no-call) be silently treated as reference.
+    """
+    rsids = GENE_RSIDS.get(gene, [])
+    if not rsids:
+        return False
+    return all(_is_real_call(variants.get(r)) for r in rsids)
+
+
+def _indeterminate(gene: str, reason: str = "missing") -> dict[str, str]:
+    if reason == "partial":
+        return {
+            "phenotype": "indeterminate",
+            "label": "Not fully assessed",
+            "implication": (
+                f"{gene} was only partially assessed — one or more of its decision-relevant "
+                "variants were not tested (no-call or absent), so a normal result cannot be "
+                "confirmed. This is NOT a clearance: an untested risk allele may be present."
+            ),
+        }
+    return {
+        "phenotype": "indeterminate",
+        "label": "Not assessed",
+        "implication": (
+            f"No usable {gene} genotype data in this file — the gene was not assessed. "
+            "This is NOT a normal result: a normal/standard-dosing conclusion cannot be drawn, "
+            "and important variants may simply be absent from this dataset."
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Gene phenotype callers
 # Input: list of (rsid, genotype) for all variants in a gene
@@ -298,9 +353,12 @@ def _call_mthfr(variants: dict[str, str]) -> dict[str, str]:
 def _call_dpyd(variants: dict[str, str]) -> dict[str, str]:
     lof = (variants.get("rs3918290", "--").count("A") +
            variants.get("rs55886062", "--").count("A"))
-    if lof >= 1:
-        return {"phenotype": "poor_metaboliser", "label": "DPD deficiency detected",
-                "implication": "CRITICAL: fluorouracil and capecitabine can cause severe or fatal toxicity. Do NOT use standard doses without DPYD testing and dose reduction."}
+    if lof >= 2:
+        return {"phenotype": "poor_metaboliser", "label": "DPD deficiency (homozygous)",
+                "implication": "CRITICAL: near-absent DPD activity. Fluorouracil and capecitabine can cause fatal toxicity. Do NOT use standard doses; these drugs are usually contraindicated without specialist dosing."}
+    if lof == 1:
+        return {"phenotype": "intermediate_metaboliser", "label": "Partial DPD deficiency (heterozygous)",
+                "implication": "Reduced DPD activity (one loss-of-function allele). Fluorouracil/capecitabine require a substantial dose reduction (commonly ~50%) — discuss with your oncologist before treatment."}
     return {"phenotype": "normal", "label": "No DPYD variants detected",
             "implication": "Normal DPD activity. Standard fluorouracil/capecitabine dosing applies."}
 
@@ -426,6 +484,18 @@ DRUG_IMPLICATIONS: list[dict[str, Any]] = [
             "Do NOT receive these drugs without urgent discussion with your oncologist."
         ),
     },
+    # DPYD intermediate (heterozygous) — partial deficiency
+    {
+        "gene": "DPYD",
+        "phenotypes": ["intermediate_metaboliser"],
+        "medications": ["fluorouracil", "capecitabine", "xeloda", "5-fu"],
+        "severity": "major",
+        "message": (
+            "Partial DPD deficiency detected (one DPYD loss-of-function allele). "
+            "Fluorouracil/capecitabine clearance is reduced — a dose reduction (commonly ~50%) "
+            "is typically required. Discuss with your oncologist before treatment."
+        ),
+    },
     # MTHFR — methotrexate, folate
     {
         "gene": "MTHFR",
@@ -440,17 +510,41 @@ DRUG_IMPLICATIONS: list[dict[str, Any]] = [
 ]
 
 
+_GENE_CALLERS = {
+    "CYP2C19": _call_cyp2c19,
+    "CYP2D6":  _call_cyp2d6,
+    "CYP2C9":  _call_cyp2c9,
+    "SLCO1B1": _call_slco1b1,
+    "VKORC1":  _call_vkorc1,
+    "MTHFR":   _call_mthfr,
+    "DPYD":    _call_dpyd,
+}
+
+
+# Phenotypes that represent a "no actionable variant" clearance. These may only be
+# reported when the gene is FULLY covered — otherwise an untested risk allele would be
+# silently cleared. Non-baseline (risk) findings stand on observed alleles and are kept.
+_BASELINE_PHENOTYPES = {"normal_metaboliser", "normal_function", "normal", "standard_dose"}
+
+
 def call_all_phenotypes(variants: dict[str, str]) -> dict[str, dict[str, str]]:
-    """Call phenotypes for all supported genes given a dict of rsid→genotype."""
-    return {
-        "CYP2C19": _call_cyp2c19(variants),
-        "CYP2D6":  _call_cyp2d6(variants),
-        "CYP2C9":  _call_cyp2c9(variants),
-        "SLCO1B1": _call_slco1b1(variants),
-        "VKORC1":  _call_vkorc1(variants),
-        "MTHFR":   _call_mthfr(variants),
-        "DPYD":    _call_dpyd(variants),
-    }
+    """Call phenotypes for all supported genes given a dict of rsid→genotype.
+
+    A gene is reported 'indeterminate' rather than 'normal' when it has no usable data,
+    OR when it would resolve to a baseline clearance but not all of its decision-relevant
+    SNPs were actually tested — absence of a result is not a clear result.
+    """
+    result: dict[str, dict[str, str]] = {}
+    for gene, caller in _GENE_CALLERS.items():
+        if not _gene_has_coverage(variants, gene):
+            result[gene] = _indeterminate(gene, "missing")
+            continue
+        called = caller(variants)
+        if called["phenotype"] in _BASELINE_PHENOTYPES and not _gene_fully_covered(variants, gene):
+            result[gene] = _indeterminate(gene, "partial")
+        else:
+            result[gene] = called
+    return result
 
 
 def pgx_drug_alerts(
@@ -481,7 +575,37 @@ def pgx_drug_alerts(
             "message": rule["message"],
         })
 
+    # Coverage-unknown alerts: a gene that could not be assessed is NOT a clear result.
+    # If the patient is on a medication governed by that gene, surface it rather than stay silent.
     order = {"critical": 0, "major": 1, "moderate": 2}
+    indeterminate_genes = {
+        g for g, p in phenotypes.items() if p.get("phenotype", "") == "indeterminate"
+    }
+    for gene in indeterminate_genes:
+        gene_rules = [r for r in DRUG_IMPLICATIONS if r["gene"] == gene]
+        matched_meds = sorted({
+            n for r in gene_rules for n in med_names
+            if any(kw in n or n.startswith(kw) for kw in r["medications"])
+        })
+        if not matched_meds:
+            continue
+        severity = min(
+            (r["severity"] for r in gene_rules),
+            key=lambda s: order.get(s, 3),
+        )
+        alerts.append({
+            "gene": gene,
+            "phenotype": "indeterminate",
+            "medications": matched_meds,
+            "severity": severity,
+            "message": (
+                f"{gene} could not be assessed from this data, but you are taking "
+                f"{', '.join(matched_meds)}, which {gene} affects. Absence of a result is NOT a "
+                f"clear result — discuss {gene} testing with your prescriber before relying on "
+                "these medications."
+            ),
+        })
+
     alerts.sort(key=lambda a: order.get(a["severity"], 3))
     return alerts
 
@@ -517,10 +641,15 @@ def parse_raw_genotype_file(path: Path) -> dict[str, str]:
                 rsid = parts[0].strip()
                 if rsid not in target_rsids:
                     continue
-                genotype = parts[3].strip().upper().replace("-", "")
-                if genotype in ("", "00"):
-                    genotype = "--"
-                variants[rsid] = genotype
+                # 23andMe: column 4 is a 2-base genotype (e.g. "AG"). AncestryDNA: columns
+                # 4 and 5 hold the two alleles separately — combine them. Anything that is
+                # not a clean 2-base call (half-call, no-call sentinel, single allele) is "--".
+                if len(parts) >= 5:
+                    raw = parts[3].strip() + parts[4].strip()
+                else:
+                    raw = parts[3].strip()
+                g = raw.upper()
+                variants[rsid] = g if _is_real_call(g) else "--"
     except (OSError, EOFError):
         pass
 
@@ -566,18 +695,34 @@ def render_pgx_report(
 
     for gene, result in phenotypes.items():
         label = result.get("label", "Unknown")
-        is_normal = "normal" in result.get("phenotype", "").lower()
-        icon = "✅" if is_normal else "⚠️"
+        pheno = result.get("phenotype", "").lower()
+        if pheno == "indeterminate":
+            icon = "❓"
+        elif "normal" in pheno:
+            icon = "✅"
+        else:
+            icon = "⚠️"
         lines.append(f"| {gene} | {icon} {label} | {gene_relevance.get(gene, '')} |")
 
     lines.append("")
 
+    indeterminate_genes = [
+        gene for gene, r in phenotypes.items()
+        if r.get("phenotype", "") == "indeterminate"
+    ]
+    if indeterminate_genes:
+        lines.append(
+            "> ❓ **Not assessed** — these genes had no usable genotype data in this file and were "
+            "**not evaluated**: " + ", ".join(indeterminate_genes) + ". "
+            "Absence of a result is not a normal result.\n"
+        )
+
     # Detailed phenotype findings
     lines.append("## Detailed findings\n")
     for gene, result in phenotypes.items():
-        is_normal = "normal" in result.get("phenotype", "").lower()
-        if is_normal:
-            continue  # Only show non-normal genes in detail
+        pheno = result.get("phenotype", "").lower()
+        if pheno == "" or "normal" in pheno or pheno == "indeterminate":
+            continue  # normal and not-assessed genes are summarised above
         lines.append(f"### {gene} — {result['label']}\n")
         lines.append(f"{result.get('implication', '')}\n")
 
@@ -594,11 +739,27 @@ def render_pgx_report(
             lines.append(f"{a['message']}\n")
     else:
         lines.append("## Medication implications\n")
-        lines.append(
-            "✅ No significant interactions detected between your pharmacogenomic profile "
-            "and your current medications.\n"
-        )
+        if indeterminate_genes:
+            lines.append(
+                "No interactions were detected among the genes that **could be assessed**. "
+                "However, the following were not assessed and may still be relevant: "
+                + ", ".join(indeterminate_genes) +
+                ". Absence of a result is not a clear result — discuss testing with your "
+                "prescriber before relying on affected medications.\n"
+            )
+        else:
+            lines.append(
+                "✅ No significant interactions detected between your pharmacogenomic profile "
+                "and your current medications.\n"
+            )
 
+    lines.append("## Limitations\n")
+    lines.append(
+        "This analysis checks only common variants on consumer genotyping arrays. It does NOT "
+        "detect CYP2D6 copy-number (ultrarapid metaboliser, relevant to codeine toxicity), rare "
+        "variants, structural changes, or strand-orientation differences between array vendors. "
+        "A 'normal' or 'not assessed' result does not rule these out.\n"
+    )
     lines.append(
         "_Always discuss pharmacogenomic findings with your prescriber or a clinical pharmacist "
         "before changing any medications._\n"
