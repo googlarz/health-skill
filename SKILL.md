@@ -244,7 +244,7 @@ Recommended flow:
 5. Drop new source files into `inbox/`.
 6. Process them with `process-inbox` so they are ingested and moved into `Archive/`.
 7. Append event notes with `add-note` when there is no source file to ingest.
-8. Refresh `HEALTH_DOSSIER.md` with `render-dossier` after important updates.
+8. Refresh `HEALTH_DOSSIER.md` with `render --view dossier` after important updates.
 9. Review `list-conflicts` when two sources disagree.
 10. Review `HEALTH_REVIEW_QUEUE.json` for extracted lab, medication, or follow-up candidates.
 11. Generate a handoff with `scripts/clinician_handoff.py` before visits when useful.

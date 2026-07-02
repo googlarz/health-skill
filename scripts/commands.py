@@ -888,6 +888,34 @@ def command_render_vitals_trends(args: argparse.Namespace) -> int:
     return 0
 
 
+# view name → handler, for the unified `render --view <name>` command.
+_RENDER_VIEWS = {
+    "summary": command_render_summary,
+    "dossier": command_render_dossier,
+    "home": command_render_home,
+    "today": command_render_today,
+    "this-week": command_render_this_week,
+    "next-appointment": command_render_next_appointment,
+    "patterns": command_render_patterns,
+    "review-worklist": command_render_review_worklist,
+    "care-status": command_render_care_status,
+    "intake-summary": command_render_intake_summary,
+    "timeline": command_render_timeline,
+    "change-report": command_render_change_report,
+    "trends": command_render_trends,
+    "weight-trends": command_render_weight_trends,
+    "vitals-trends": command_render_vitals_trends,
+}
+
+
+def command_render(args: argparse.Namespace) -> int:
+    views = list(_RENDER_VIEWS) if args.view == "all" else [args.view]
+    rc = 0
+    for name in views:
+        rc = _RENDER_VIEWS[name](args) or rc
+    return rc
+
+
 def command_reconcile_medications(args: argparse.Namespace) -> int:
     root = _resolve_root(args)
     with workspace_lock(root, args.person_id):
@@ -1325,71 +1353,12 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_review_tier.add_argument("--note", default="")
     resolve_review_tier.set_defaults(func=command_resolve_review_tier)
 
-    render_summary = subparsers.add_parser("render-summary")
-    render_summary.add_argument("--root", default=None)
-    render_summary.add_argument("--person-id", default="")
-    render_summary.set_defaults(func=command_render_summary)
-
-    render_dossier = subparsers.add_parser("render-dossier")
-    render_dossier.add_argument("--root", default=None)
-    render_dossier.add_argument("--person-id", default="")
-    render_dossier.set_defaults(func=command_render_dossier)
-
-    render_home = subparsers.add_parser("render-home")
-    render_home.add_argument("--root", default=None)
-    render_home.add_argument("--person-id", default="")
-    render_home.set_defaults(func=command_render_home)
-
-    render_today = subparsers.add_parser("render-today")
-    render_today.add_argument("--root", default=None)
-    render_today.add_argument("--person-id", default="")
-    render_today.set_defaults(func=command_render_today)
-
-    render_this_week = subparsers.add_parser("render-this-week")
-    render_this_week.add_argument("--root", default=None)
-    render_this_week.add_argument("--person-id", default="")
-    render_this_week.set_defaults(func=command_render_this_week)
-
-    render_next_appointment = subparsers.add_parser("render-next-appointment")
-    render_next_appointment.add_argument("--root", default=None)
-    render_next_appointment.add_argument("--person-id", default="")
-    render_next_appointment.set_defaults(func=command_render_next_appointment)
-
-    render_patterns = subparsers.add_parser("render-patterns")
-    render_patterns.add_argument("--root", default=None)
-    render_patterns.add_argument("--person-id", default="")
-    render_patterns.set_defaults(func=command_render_patterns)
-
-    render_review_worklist = subparsers.add_parser("render-review-worklist")
-    render_review_worklist.add_argument("--root", default=None)
-    render_review_worklist.add_argument("--person-id", default="")
-    render_review_worklist.set_defaults(func=command_render_review_worklist)
-
-    render_care_status = subparsers.add_parser("render-care-status")
-    render_care_status.add_argument("--root", default=None)
-    render_care_status.add_argument("--person-id", default="")
-    render_care_status.set_defaults(func=command_render_care_status)
-
-    render_intake_summary = subparsers.add_parser("render-intake-summary")
-    render_intake_summary.add_argument("--root", default=None)
-    render_intake_summary.add_argument("--person-id", default="")
-    render_intake_summary.set_defaults(func=command_render_intake_summary)
-
-    render_timeline = subparsers.add_parser("render-timeline")
-    render_timeline.add_argument("--root", default=None)
-    render_timeline.add_argument("--person-id", default="")
-    render_timeline.set_defaults(func=command_render_timeline)
-
-    render_change_report = subparsers.add_parser("render-change-report")
-    render_change_report.add_argument("--root", default=None)
-    render_change_report.add_argument("--person-id", default="")
-    render_change_report.add_argument("--days", type=int, default=30)
-    render_change_report.set_defaults(func=command_render_change_report)
-
-    render_trends = subparsers.add_parser("render-trends")
-    render_trends.add_argument("--root", default=None)
-    render_trends.add_argument("--person-id", default="")
-    render_trends.set_defaults(func=command_render_trends)
+    render = subparsers.add_parser("render")
+    render.add_argument("--view", choices=list(_RENDER_VIEWS) + ["all"], default="all")
+    render.add_argument("--root", default=None)
+    render.add_argument("--person-id", default="")
+    render.add_argument("--days", type=int, default=30)  # used by change-report view
+    render.set_defaults(func=command_render)
 
     record_weight_parser = subparsers.add_parser("record-weight")
     record_weight_parser.add_argument("--root", default=None)
@@ -1399,11 +1368,6 @@ def build_parser() -> argparse.ArgumentParser:
     record_weight_parser.add_argument("--date", default="")
     record_weight_parser.add_argument("--note", default="")
     record_weight_parser.set_defaults(func=command_record_weight)
-
-    render_weight_trends = subparsers.add_parser("render-weight-trends")
-    render_weight_trends.add_argument("--root", default=None)
-    render_weight_trends.add_argument("--person-id", default="")
-    render_weight_trends.set_defaults(func=command_render_weight_trends)
 
     record_vital_parser = subparsers.add_parser("record-vital")
     record_vital_parser.add_argument("--root", default=None)
@@ -1429,11 +1393,6 @@ def build_parser() -> argparse.ArgumentParser:
     record_vital_parser.add_argument("--date", default="")
     record_vital_parser.add_argument("--note", default="")
     record_vital_parser.set_defaults(func=command_record_vital)
-
-    render_vitals_trends = subparsers.add_parser("render-vitals-trends")
-    render_vitals_trends.add_argument("--root", default=None)
-    render_vitals_trends.add_argument("--person-id", default="")
-    render_vitals_trends.set_defaults(func=command_render_vitals_trends)
 
     reconcile = subparsers.add_parser("reconcile-medications")
     reconcile.add_argument("--root", default=None)

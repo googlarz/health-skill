@@ -350,24 +350,26 @@ resolve-conflict --root . --id <conflict-id> --source "lab_report_june"
 
 ## Rendered views
 
-These regenerate the markdown files in your workspace:
+One command regenerates the markdown files in your workspace. `render` with no
+`--view` rebuilds every view; pass `--view <name>` for just one.
 
 ```bash
-render-summary --root .          # HEALTH_SUMMARY.md
-render-dossier --root .          # HEALTH_DOSSIER.md
-render-home --root .             # HEALTH_HOME.md
-render-today --root .            # TODAY.md
-render-this-week --root .        # THIS_WEEK.md
-render-trends --root .           # HEALTH_TRENDS.md
-render-weight-trends --root .    # WEIGHT_TRENDS.md
-render-vitals-trends --root .    # VITALS_TRENDS.md
-render-patterns --root .         # HEALTH_PATTERNS.md
-render-timeline --root .         # HEALTH_TIMELINE.md
-render-next-appointment --root . # NEXT_APPOINTMENT.md
-render-review-worklist --root .  # REVIEW_WORKLIST.md
-render-care-status --root .      # CARE_STATUS.md
-render-intake-summary --root .   # INTAKE_SUMMARY.md
-render-change-report --root .    # CHANGE_REPORT.md
+render --root .                          # regenerate every view (default)
+render --root . --view today             # TODAY.md
+render --root . --view this-week         # THIS_WEEK.md
+render --root . --view summary           # HEALTH_SUMMARY.md
+render --root . --view dossier           # HEALTH_DOSSIER.md
+render --root . --view home              # HEALTH_HOME.md
+render --root . --view trends            # HEALTH_TRENDS.md
+render --root . --view weight-trends     # WEIGHT_TRENDS.md
+render --root . --view vitals-trends     # VITALS_TRENDS.md
+render --root . --view patterns          # HEALTH_PATTERNS.md
+render --root . --view timeline          # HEALTH_TIMELINE.md
+render --root . --view next-appointment  # NEXT_APPOINTMENT.md
+render --root . --view review-worklist   # REVIEW_WORKLIST.md
+render --root . --view care-status       # CARE_STATUS.md
+render --root . --view intake-summary    # INTAKE_SUMMARY.md
+render --root . --view change-report     # CHANGE_REPORT.md
 ```
 
 ---
