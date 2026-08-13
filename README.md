@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-265%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-312%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.3-purple" alt="v2.3">
+    <img src="https://img.shields.io/badge/version-2.4.0-purple" alt="v2.4.0">
   </p>
 </p>
 
@@ -399,6 +399,14 @@ about the same?
 
 ## Recent Releases
 
+### v2.4.0 — Safety hardening, FHIR completeness, Garmin import
+- **Pharmacogenomics safety fix** — half-calls, no-call sentinels, and AncestryDNA's split-allele columns could previously be silently coerced into a false "normal" clearance; a strict per-allele coverage check now closes this for every supported gene, with a red-team test suite guarding it
+- **FHIR import completeness** — unrecognized resource types (Procedure, CarePlan, DocumentReference, ...) are no longer silently dropped; `import-fhir` now reports what it couldn't import instead of going quiet, and `DiagnosticReport` (radiology/pathology narratives) is now merged
+- **Garmin Connect import** — drop a Garmin "Export CSV" (Activities) file into `import-wearable` and it auto-detects and populates your training history, feeding `run-summary` directly
+- **`HEALTH_ROOT` fix** — `workout-log`, `workout-plan`, `daily-checkin`, `cycle-log`, `list-review-queue`, and `list-conflicts` previously crashed instead of honoring the env var; fixed at the shared root-resolution layer so it can't regress per-command again
+- **CLI simplified** — 15 separate `render-*` commands collapsed into one `render --view <name>` (default: all)
+- **312 tests, all passing** (up from 265)
+
 ### v2.3 — Conversational UX overhaul
 - **`hi` / `hello` / `hey`** — context-aware greeting that opens with the one thing that matters most right now
 - **`status`** — one-glance workspace summary with nudge counts, last check-in, and quick actions
@@ -457,7 +465,7 @@ See [references/safety-protocol.md](references/safety-protocol.md) for the full 
 ## Tests
 
 ```bash
-python3 -m pytest tests/ -q   # 265 tests, ~2s
+python3 -m pytest tests/ -q   # 312 tests, ~2s
 ```
 
 ## License
