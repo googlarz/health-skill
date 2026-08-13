@@ -9,6 +9,15 @@ records in FHIR R4 JSON format. This module extracts:
 - Observations (lab results, vitals)
 - Allergies
 - Immunisations
+- Diagnostic reports (radiology/pathology narrative summaries)
+
+Any other clinically-relevant resource type present in the bundle (Procedure,
+CarePlan, DocumentReference, FamilyMemberHistory, ...) is NOT silently
+dropped: it is counted under a "skipped_<ResourceType>" key in the returned
+counts so the caller can tell the user something was left out, rather than
+implying the import was complete. Purely administrative resource types
+(Patient, Encounter, Practitioner, Organization, ...) are ignored without
+being reported, since they carry no clinical content of their own.
 
 Supports both a single FHIR Bundle and a directory of individual FHIR resources.
 
@@ -124,6 +133,15 @@ def _find_loinc_code(coding_list: list[dict[str, Any]]) -> str | None:
     return None
 
 
+# Resource types with no clinical content of their own — safe to ignore without
+# reporting. Anything NOT in this set and NOT explicitly handled below is a
+# clinically-relevant resource we don't yet merge, and must be surfaced as skipped.
+_ADMINISTRATIVE_RESOURCE_TYPES = {
+    "Patient", "Encounter", "Practitioner", "PractitionerRole",
+    "Organization", "Location", "Coverage", "Provenance", "Composition",
+}
+
+
 def _process_bundle(bundle: dict[str, Any], root: Path, person_id: str) -> dict[str, int]:
     entries = bundle.get("entry") or []
     resources = [e.get("resource") for e in entries if e.get("resource")]
@@ -157,6 +175,15 @@ def _process_resources(
                 added = _merge_observation(r, root, person_id, profile)
                 for k, v in added.items():
                     counts[k] = counts.get(k, 0) + v
+
+            elif rtype == "DiagnosticReport":
+                counts["diagnostic_reports"] = (
+                    counts.get("diagnostic_reports", 0) + _merge_diagnostic_report(r, profile)
+                )
+
+            elif rtype and rtype not in _ADMINISTRATIVE_RESOURCE_TYPES:
+                key = f"skipped_{rtype}"
+                counts[key] = counts.get(key, 0) + 1
 
         save_profile(root, person_id, profile)
 
@@ -259,6 +286,37 @@ def _merge_immunisation(r: dict, profile: dict) -> int:
     return 1
 
 
+def _merge_diagnostic_report(r: dict, profile: dict) -> int:
+    """Narrative reports (radiology, pathology, panels) — the numeric results they
+    reference usually arrive as sibling Observation resources in the same bundle
+    and are captured separately; this keeps the human-readable conclusion, which
+    Observation resources don't carry.
+
+    # ponytail: presentedForm (embedded base64 PDF/text) is not decoded — only
+    # `conclusion` and the report title are captured. Add PDF/text extraction if
+    # a real export shows up where the conclusion field is empty but presentedForm
+    # holds the only summary.
+    """
+    coding = (r.get("code") or {}).get("coding") or []
+    text = (r.get("code") or {}).get("text") or ""
+    name = text or (coding[0].get("display") if coding else "") or ""
+    if not name:
+        return 0
+
+    date = _parse_fhir_date(
+        r.get("effectiveDateTime") or r.get("effectivePeriod", {}).get("start") or r.get("issued") or ""
+    )
+    conclusion = r.get("conclusion") or ""
+
+    existing = profile.setdefault("diagnostic_reports", [])
+    for d in existing:
+        if (d.get("name") or "").lower() == name.lower() and d.get("date") == date:
+            return 0
+
+    existing.append({"name": name, "date": date, "conclusion": conclusion, "source": "fhir"})
+    return 1
+
+
 def _merge_observation(
     r: dict, root: Path, person_id: str, profile: dict
 ) -> dict[str, int]:
@@ -336,7 +394,7 @@ def is_fhir_file(path: Path) -> bool:
         return rtype in (
             "Bundle", "Patient", "Condition", "Observation",
             "MedicationRequest", "MedicationStatement",
-            "AllergyIntolerance", "Immunization",
+            "AllergyIntolerance", "Immunization", "DiagnosticReport",
         )
     except Exception:
         return False

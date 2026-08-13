@@ -2265,9 +2265,15 @@ def _command_import_fhir(args: argparse.Namespace) -> int:
     ensure_person(root, args.person_id)
     fhir_path = Path(args.file)
     counts = import_fhir_file(root, args.person_id, fhir_path)
+    imported = {k: v for k, v in counts.items() if not k.startswith("skipped_")}
+    skipped = {k[len("skipped_"):]: v for k, v in counts.items() if k.startswith("skipped_")}
     print("FHIR import complete:")
-    for k, v in counts.items():
+    for k, v in imported.items():
         print(f"  - {k}: {v}")
+    if skipped:
+        print("  NOT imported (resource types not yet supported by health-skill):")
+        for k, v in skipped.items():
+            print(f"    - {k}: {v}")
     return 0
 
 

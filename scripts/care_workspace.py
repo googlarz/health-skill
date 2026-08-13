@@ -76,6 +76,7 @@ DEFAULT_PROFILE = {
     "goals": [],  # longevity / fitness / health goals with targets
     "supplements": [],  # supplements/nutraceuticals (name, dose, frequency)
     "interventions": [],  # named lifestyle interventions with protocols & outcome metrics
+    "diagnostic_reports": [],  # narrative reports (radiology, pathology) from FHIR DiagnosticReport
     "preferences": {
         "summary_style": "concise",
         "weight_unit": "kg",
