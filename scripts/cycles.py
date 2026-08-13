@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .care_workspace import upsert_record, load_profile, save_profile, ensure_person, now_utc
+    from .care_workspace import upsert_record, load_profile, save_profile, ensure_person, now_utc, resolve_root
 except ImportError:
-    from care_workspace import upsert_record, load_profile, save_profile, ensure_person, now_utc
+    from care_workspace import upsert_record, load_profile, save_profile, ensure_person, now_utc, resolve_root  # type: ignore
 
 
 PRIVACY_NOTE = (
@@ -286,7 +286,7 @@ def render_cycles_text(profile: dict[str, Any]) -> str:
 
 
 def command_cycle_log(args: argparse.Namespace) -> int:
-    root = Path(args.root)
+    root = resolve_root(args)
     event = parse_cycle_event(args.text)
     if getattr(args, "date", ""):
         event["date"] = args.date

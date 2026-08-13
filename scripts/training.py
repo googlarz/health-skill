@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .care_workspace import upsert_record, load_profile
+    from .care_workspace import upsert_record, load_profile, resolve_root
 except ImportError:
-    from care_workspace import upsert_record, load_profile
+    from care_workspace import upsert_record, load_profile, resolve_root  # type: ignore
 
 
 SAFETY_NOTE = (
@@ -560,7 +560,7 @@ def render_training_text(profile: dict[str, Any]) -> str:
 
 
 def command_workout_log(args: argparse.Namespace) -> int:
-    root = Path(args.root)
+    root = resolve_root(args)
     parsed = parse_workout(args.text)
     saved = log_workout(root, args.person_id, parsed)
     print(f"Logged workout: {saved['workout']}")
@@ -570,7 +570,7 @@ def command_workout_log(args: argparse.Namespace) -> int:
 
 
 def command_workout_plan(args: argparse.Namespace) -> int:
-    root = Path(args.root)
+    root = resolve_root(args)
     constraints = {
         "equipment": _normalize_list(getattr(args, "equipment", "")),
         "injuries": _normalize_list(getattr(args, "injuries", "")),

@@ -42,6 +42,7 @@ try:
         reconciliation_path,
         record_vital,
         record_weight,
+        resolve_root,
         review_queue_path,
         review_worklist_path,
         save_conflicts,
@@ -176,6 +177,7 @@ except ImportError:
         reconciliation_path,
         record_vital,
         record_weight,
+        resolve_root,
         review_queue_path,
         review_worklist_path,
         save_conflicts,
@@ -281,21 +283,9 @@ except ImportError:
     )
 
 
-def _resolve_root(args: argparse.Namespace) -> Path:
-    root = getattr(args, "root", None) or os.environ.get("HEALTH_ROOT", "")
-    if not root:
-        raise SystemExit(
-            "\n  No workspace found.\n"
-            "  • Pass --root /path/to/workspace, OR\n"
-            "  • export HEALTH_ROOT=/path/to/workspace\n"
-        )
-    p = Path(root)
-    if not p.exists():
-        raise SystemExit(
-            f"\n  Workspace '{root}' does not exist.\n"
-            f"  Run: health-skill init-project --root {root}\n"
-        )
-    return p
+# _resolve_root now lives in care_workspace.resolve_root so every command_*
+# handler across all scripts.py modules can share it, not just this file's.
+_resolve_root = resolve_root
 
 
 def command_init_project(args: argparse.Namespace) -> int:
@@ -485,7 +475,7 @@ def command_process_inbox(args: argparse.Namespace) -> int:
 
 
 def command_list_review_queue(args: argparse.Namespace) -> int:
-    items = load_review_queue(Path(args.root), args.person_id)
+    items = load_review_queue(_resolve_root(args), args.person_id)
     if args.status:
         items = [item for item in items if item.get("status") == args.status]
     print(json.dumps(items, indent=2))
@@ -1032,7 +1022,7 @@ def command_generate_appointment_request(args: argparse.Namespace) -> int:
 
 
 def command_list_conflicts(args: argparse.Namespace) -> int:
-    conflicts = load_conflicts(Path(args.root), args.person_id)
+    conflicts = load_conflicts(_resolve_root(args), args.person_id)
     if args.status:
         conflicts = [item for item in conflicts if item["status"] == args.status]
     print(json.dumps(conflicts, indent=2))

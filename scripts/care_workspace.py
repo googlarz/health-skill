@@ -145,6 +145,29 @@ RECORD_KEYS = {
 }
 
 
+def resolve_root(args: argparse.Namespace) -> Path:
+    """Resolve a workspace root from CLI args, falling back to HEALTH_ROOT.
+
+    Shared by every `command_*`/`_command_*` handler across scripts.py modules
+    (not just commands.py) so every entry point honors HEALTH_ROOT the same way
+    and fails with the same friendly message instead of a raw Path(None) crash.
+    """
+    root = getattr(args, "root", None) or os.environ.get("HEALTH_ROOT", "")
+    if not root:
+        raise SystemExit(
+            "\n  No workspace found.\n"
+            "  • Pass --root /path/to/workspace, OR\n"
+            "  • export HEALTH_ROOT=/path/to/workspace\n"
+        )
+    p = Path(root)
+    if not p.exists():
+        raise SystemExit(
+            f"\n  Workspace '{root}' does not exist.\n"
+            f"  Run: health-skill init-project --root {root}\n"
+        )
+    return p
+
+
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 

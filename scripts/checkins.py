@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .care_workspace import upsert_record, load_profile
+    from .care_workspace import upsert_record, load_profile, resolve_root
 except ImportError:
-    from care_workspace import upsert_record, load_profile
+    from care_workspace import upsert_record, load_profile, resolve_root  # type: ignore
 
 
 MOOD_ADJECTIVES = {
@@ -297,7 +297,7 @@ def render_checkins_text(profile: dict[str, Any]) -> str:
 
 
 def command_daily_checkin(args: argparse.Namespace) -> int:
-    root = Path(args.root)
+    root = resolve_root(args)
     parsed = parse_checkin(args.text)
     if getattr(args, "date", ""):
         parsed["date"] = args.date
