@@ -3,8 +3,9 @@
 
 Supports:
 - Apple Health export (export.xml)
-- Generic CSV (date,metric,value[,unit]) — works for Oura, Whoop, Garmin exports
-  if user formats them, or copy-pasted from a spreadsheet.
+- Garmin Connect activities export (Activities.csv, detected by header)
+- Generic CSV (date,metric,value[,unit]) — works for Oura, Whoop, or any device
+  if the user formats it, or copy-pasted from a spreadsheet.
 
 Imports map to:
   HKQuantityTypeIdentifierStepCount        → vital metric=steps
@@ -34,6 +35,7 @@ try:
         record_weight,
         load_profile,
         save_profile,
+        upsert_record,
         workspace_lock,
     )
 except ImportError:
@@ -42,6 +44,7 @@ except ImportError:
         record_weight,
         load_profile,
         save_profile,
+        upsert_record,
         workspace_lock,
     )
 
@@ -162,6 +165,142 @@ def _import_apple_xml(root: Path, person_id: str, xml_path: Path, max_records: i
             profile["daily_checkins"] = sorted(checkins, key=lambda c: str(c.get("date", "")))
             save_profile(root, person_id, profile)
         counts["sleep"] = len(sleep_per_day)
+
+    return counts
+
+
+# Garmin Connect "Export CSV" (Activities list -> gear icon -> Export CSV) activity
+# type labels -> health-skill's workout `type` field. Unrecognized types fall back to
+# a lowercase/underscored version of Garmin's own label rather than being dropped.
+_GARMIN_TYPE_MAP = {
+    "running": "run", "treadmill running": "run", "trail running": "run",
+    "track running": "run", "indoor running": "run", "street running": "run",
+    "cycling": "cycling", "road cycling": "cycling", "mountain biking": "cycling",
+    "indoor cycling": "cycling", "gravel/unpaved cycling": "cycling",
+    "walking": "walk", "hiking": "walk", "casual walking": "walk",
+    "swimming": "swim", "open water swimming": "swim", "lap swimming": "swim",
+    "strength_training": "strength", "strength training": "strength",
+}
+
+# Columns this importer trusts. Garmin's CSV export has 30+ locale/device-dependent
+# columns (cadence, power, GCT, vertical oscillation, swim SWOLF, dive time, ...);
+# ponytail: only the columns present and reliable across nearly every activity type
+# are parsed. Add more if a specific metric (e.g. running power) becomes worth the
+# per-column fragility of Garmin's export format.
+_GARMIN_HEADER_MARKERS = ("activity type", "distance", "time")
+
+
+def _row_get(row: dict[str, str], *keys: str) -> str:
+    """Case-insensitive column lookup — Garmin's export header casing/wording has
+    drifted across app versions and locales."""
+    lower_map = {(k or "").strip().lower(): v for k, v in row.items()}
+    for key in keys:
+        v = lower_map.get(key.lower())
+        if v not in (None, ""):
+            return v
+    return ""
+
+
+def _normalize_garmin_type(raw: str) -> str:
+    key = (raw or "").strip().lower()
+    if key in _GARMIN_TYPE_MAP:
+        return _GARMIN_TYPE_MAP[key]
+    return key.replace(" ", "_").replace("/", "_") or "other"
+
+
+def _parse_garmin_duration_min(raw: str) -> float | None:
+    """Garmin 'Time' is 'H:MM:SS' or 'MM:SS'."""
+    raw = (raw or "").strip()
+    if not raw or raw == "--":
+        return None
+    parts = raw.split(":")
+    try:
+        parts = [float(p) for p in parts]
+    except ValueError:
+        return None
+    if len(parts) == 3:
+        h, m, s = parts
+    elif len(parts) == 2:
+        h, m, s = 0.0, parts[0], parts[1]
+    else:
+        return None
+    return round(h * 60 + m + s / 60.0, 2)
+
+
+def _parse_garmin_float(raw: str) -> float | None:
+    raw = (raw or "").strip().replace(",", "")
+    if not raw or raw == "--":
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def is_garmin_activities_csv(csv_path: Path) -> bool:
+    """Sniff the header row to distinguish a Garmin Connect export from the
+    generic date/metric/value CSV format — both are plain .csv files."""
+    try:
+        with open(csv_path, newline="", encoding="utf-8-sig") as fh:
+            header = next(csv.reader(fh), [])
+    except (OSError, StopIteration):
+        return False
+    lower_header = {h.strip().lower() for h in header}
+    return all(marker in lower_header for marker in _GARMIN_HEADER_MARKERS)
+
+
+def _import_garmin_csv(
+    root: Path, person_id: str, csv_path: Path, distance_unit: str = "km"
+) -> dict[str, int]:
+    """Import a Garmin Connect activities export into `workouts`.
+
+    Distance is recorded in whichever unit the account was configured in when the
+    file was exported (Garmin's CSV does not encode the unit) — pass
+    distance_unit="mi" if the export is in miles. Pace is left for run_summary()'s
+    existing distance/duration fallback rather than parsed from Garmin's own
+    (equally unit-ambiguous) "Avg Pace" column.
+    """
+    counts: dict[str, int] = {}
+    with open(csv_path, newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            raw_date = _row_get(row, "Date")
+            if not raw_date:
+                continue
+            d = raw_date[:10]
+
+            record: dict[str, Any] = {
+                "type": _normalize_garmin_type(_row_get(row, "Activity Type")),
+                "date": d,
+            }
+
+            distance = _parse_garmin_float(_row_get(row, "Distance"))
+            if distance is not None:
+                record["distance_km"] = round(
+                    distance * 1.60934 if distance_unit == "mi" else distance, 3
+                )
+
+            duration = _parse_garmin_duration_min(_row_get(row, "Time", "Moving Time"))
+            if duration is not None:
+                record["duration_min"] = duration
+
+            hr = _parse_garmin_float(_row_get(row, "Avg HR"))
+            if hr is not None:
+                record["hr_avg"] = hr
+
+            calories = _parse_garmin_float(_row_get(row, "Calories"))
+            if calories is not None:
+                record["calories"] = calories
+
+            title = _row_get(row, "Title")
+            if title:
+                record["notes"] = title
+
+            upsert_record(
+                root, person_id, "workouts", record,
+                source_type="wearable", source_label="Garmin Connect", source_date=d,
+            )
+            counts[record["type"]] = counts.get(record["type"], 0) + 1
 
     return counts
 
@@ -317,14 +456,22 @@ def _import_health_auto_export_json(root: Path, person_id: str, json_path: Path)
     return counts
 
 
-def import_wearable_file(root: Path, person_id: str, file_path: Path) -> dict[str, int]:
-    """Detect format and import. Returns counts of records added per metric."""
+def import_wearable_file(
+    root: Path, person_id: str, file_path: Path, distance_unit: str = "km"
+) -> dict[str, int]:
+    """Detect format and import. Returns counts of records added per metric.
+
+    distance_unit only affects Garmin CSV imports (their export doesn't encode
+    the account's unit setting) — pass "mi" if the export was made in miles.
+    """
     if not file_path.exists():
         raise FileNotFoundError(file_path)
     name = file_path.name.lower()
     if name.endswith(".xml"):
         return _import_apple_xml(root, person_id, file_path)
     if name.endswith(".csv"):
+        if is_garmin_activities_csv(file_path):
+            return _import_garmin_csv(root, person_id, file_path, distance_unit)
         return _import_csv(root, person_id, file_path)
     if name.endswith(".json"):
         return _import_health_auto_export_json(root, person_id, file_path)

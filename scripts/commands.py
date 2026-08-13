@@ -1620,10 +1620,14 @@ def build_parser() -> argparse.ArgumentParser:
     providers_list_parser.add_argument("--person-id", default="")
     providers_list_parser.set_defaults(func=_command_providers)
 
-    wearable_parser = subparsers.add_parser("import-wearable", help="Import Apple Health XML / generic CSV")
+    wearable_parser = subparsers.add_parser("import-wearable", help="Import Apple Health XML / Garmin or generic CSV")
     wearable_parser.add_argument("--root", default=None)
     wearable_parser.add_argument("--person-id", default="")
     wearable_parser.add_argument("--file", required=True, help="Path to export.xml or .csv")
+    wearable_parser.add_argument(
+        "--distance-unit", choices=["km", "mi"], default="km",
+        help="Unit of the Distance column in a Garmin export (Garmin's CSV doesn't record this)",
+    )
     wearable_parser.set_defaults(func=_command_import_wearable)
 
     triage_parser = subparsers.add_parser("triage", help="Run structured symptom triage")
@@ -2100,7 +2104,9 @@ def _command_providers(args: argparse.Namespace) -> int:
 def _command_import_wearable(args: argparse.Namespace) -> int:
     root = _resolve_root(args)
     ensure_person(root, args.person_id)
-    counts = import_wearable_file(root, args.person_id, Path(args.file))
+    counts = import_wearable_file(
+        root, args.person_id, Path(args.file), getattr(args, "distance_unit", "km")
+    )
     if not counts:
         print("No supported records found.")
         return 0

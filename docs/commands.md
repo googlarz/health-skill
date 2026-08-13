@@ -263,9 +263,10 @@ household-dashboard --root ~/Health
 ## Wearables
 
 ```bash
-# Import Apple Health XML or any CSV/JSON
+# Import Apple Health XML, a Garmin Connect activities export, or any CSV/JSON
 import-wearable --root . --file inbox/export.xml
-import-wearable --root . --file inbox/garmin_activities.csv
+import-wearable --root . --file inbox/Activities.csv               # Garmin (auto-detected)
+import-wearable --root . --file inbox/Activities.csv --distance-unit mi  # if exported in miles
 
 # Sync everything in inbox/wearable/
 sync-wearable --root .
