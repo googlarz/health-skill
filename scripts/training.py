@@ -146,22 +146,26 @@ def parse_workout(text: str) -> dict[str, Any]:
         if m:
             result["distance_km"] = round(float(m.group(1)) * 1.60934, 2)
 
-    # Exercises: "bench 80kg 5x5", "rows 60kg 3x10"
+    # Exercises: "bench 80kg 5x5", "rows 60kg 3x10", optionally "... RPE 8" or "@RPE 7.5"
     ex_pattern = re.compile(
-        r"([A-Za-z][A-Za-z \-]+?)\s+(\d+(?:\.\d+)?)\s*(kg|lb|lbs)\s+(\d+)\s*[x×]\s*(\d+)",
+        r"([A-Za-z][A-Za-z \-]+?)\s+(\d+(?:\.\d+)?)\s*(kg|lb|lbs)\s+(\d+)\s*[x×]\s*(\d+)"
+        r"(?:\s*@?\s*rpe\s*:?\s*(\d+(?:\.\d)?))?",
         re.IGNORECASE,
     )
     for m in ex_pattern.finditer(t):
-        name, weight, unit, sets, reps = m.groups()
+        name, weight, unit, sets, reps, rpe = m.groups()
         w = float(weight)
         if unit.lower().startswith("lb"):
             w = round(w * 0.453592, 2)
-        result["exercises"].append({
+        exercise: dict[str, Any] = {
             "name": name.strip().title(),
             "weight_kg": w,
             "sets": int(sets),
             "reps": int(reps),
-        })
+        }
+        if rpe is not None:
+            exercise["rpe"] = float(rpe)
+        result["exercises"].append(exercise)
 
     # Intensity
     if "felt great" in low or "easy" in low or "felt good" in low:
