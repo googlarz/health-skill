@@ -110,7 +110,7 @@ def build_monthly_report(profile: dict[str, Any], root: Path, person_id: str) ->
         fields = [
             ("mood",        "Mood",    "/ 10"),
             ("energy",      "Energy",  "/ 10"),
-            ("pain",        "Pain",    "/ 10"),
+            ("pain_severity", "Pain",  "/ 10"),
             ("sleep_hours", "Sleep",   "h"),
         ]
         highlights: list[str] = []
@@ -255,7 +255,7 @@ def _pick_action(
             return f"Prioritise sleep — your average was {avg_sleep:.1f}h this month. Aim for 7+."
 
     # High pain
-    pain_vals = [float(c["pain"]) for c in checkins if c.get("pain") is not None]
+    pain_vals = [float(c["pain_severity"]) for c in checkins if c.get("pain_severity") is not None]
     if pain_vals:
         avg_pain = _avg(pain_vals)
         assert avg_pain is not None

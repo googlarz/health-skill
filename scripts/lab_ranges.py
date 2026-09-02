@@ -25,6 +25,9 @@ BASE_RANGES: dict[str, dict[str, Any]] = {
     "LDL":           {"low": 0,    "high": 130,  "unit": "mg/dL",    "optimal": 100},
     "HDL":           {"low": 40,   "high": 999,  "unit": "mg/dL",    "optimal": 60},   # higher = better
     "Triglycerides": {"low": 0,    "high": 150,  "unit": "mg/dL"},
+    # Coagulation — base range is for people NOT on anticoagulants; the warfarin
+    # MEDICATION_ADJUSTMENTS entry re-targets this to 2.0–3.0.
+    "INR":           {"low": 0.8,  "high": 1.1,  "unit": ""},
     "Total Cholesterol": {"low": 0, "high": 200, "unit": "mg/dL"},
     "ApoB":          {"low": 0,    "high": 90,   "unit": "mg/dL"},
 

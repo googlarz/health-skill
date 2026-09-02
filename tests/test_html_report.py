@@ -28,7 +28,7 @@ class HTMLReportTests(unittest.TestCase):
         for i in range(30):
             d = (date.today() - timedelta(days=i)).isoformat()
             self.profile.setdefault("daily_checkins", []).append({
-                "date": d, "mood": 7.0, "energy": 6.5, "pain": 2.0, "sleep_hours": 7.2
+                "date": d, "mood": 7.0, "energy": 6.5, "pain_severity": 2.0, "sleep_hours": 7.2
             })
         self.profile["weight_entries"] = [
             {"date": (date.today() - timedelta(days=i)).isoformat(), "value": 65.0 + i * 0.02, "unit": "kg"}

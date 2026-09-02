@@ -428,7 +428,7 @@ def _trend_chart_data(checkins: list[dict[str, Any]], days: int = 90) -> dict[st
         mood.append(c.get("mood") or None)
         energy.append(c.get("energy") or None)
         sleep.append(c.get("sleep_hours") or None)
-        pain.append(c.get("pain") or None)
+        pain.append(c.get("pain_severity") or None)
     return {"labels": labels, "mood": mood, "energy": energy, "sleep": sleep, "pain": pain}
 
 
@@ -503,8 +503,8 @@ def _overview_cards(checkins: list[dict[str, Any]]) -> dict[str, Any]:
                (today - timedelta(days=60)).isoformat() <= c.get("date", "") < (today - timedelta(days=30)).isoformat()]
 
     result: dict[str, Any] = {}
-    for key in ("mood", "energy", "sleep_hours", "pain"):
-        out_key = "sleep" if key == "sleep_hours" else key
+    for key in ("mood", "energy", "sleep_hours", "pain_severity"):
+        out_key = {"sleep_hours": "sleep", "pain_severity": "pain"}.get(key, key)
         cur = avg(key, last30)
         prev = avg(key, prev30)
         result[out_key] = cur

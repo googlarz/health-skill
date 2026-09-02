@@ -188,12 +188,14 @@ def extract_document_date(raw_text: str) -> str:
     """
     date_patterns = [
         re.compile(
-            r"(?:Date\s+Collected|Specimen\s+Collected|Date\s+of\s+Service|Report\s+Date|Date)\s*:\s*"
+            r"(?:Date\s+Collected|Specimen\s+Collected|Date\s+of\s+Service|Report\s+Date"
+            r"|(?<!birth\s)(?<!print\s)(?<!order\s)Date)\s*:\s*"
             r"(\d{1,2})/(\d{1,2})/(\d{4})",
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:Date\s+Collected|Specimen\s+Collected|Date\s+of\s+Service|Report\s+Date|Date)\s*:\s*"
+            r"(?:Date\s+Collected|Specimen\s+Collected|Date\s+of\s+Service|Report\s+Date"
+            r"|(?<!birth\s)(?<!print\s)(?<!order\s)Date)\s*:\s*"
             r"(\d{4})-(\d{1,2})-(\d{1,2})",
             re.IGNORECASE,
         ),

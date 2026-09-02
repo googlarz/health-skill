@@ -73,7 +73,7 @@ def build_greeting(root: Path, person_id: str) -> str:
         c for c in checkins
         if _parse_date(c.get("date", "")) and _days_ago(_parse_date(c.get("date", ""))) <= 7  # type: ignore[arg-type]
     ]
-    pain_vals = [float(c["pain"]) for c in recent_7 if c.get("pain") is not None]
+    pain_vals = [float(c["pain_severity"]) for c in recent_7 if c.get("pain_severity") is not None]
     if len(pain_vals) >= 4 and sum(pain_vals) / len(pain_vals) >= 6.0:
         avg = sum(pain_vals) / len(pain_vals)
         return (

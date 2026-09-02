@@ -137,7 +137,7 @@ def _detect_sleep_pain(profile: dict[str, Any]) -> dict[str, Any] | None:
     long_sleep_pain = []
     for c in checkins[-60:]:
         sleep = c.get("sleep") or c.get("sleep_hours")
-        pain = c.get("pain")
+        pain = c.get("pain_severity")
         if sleep is None or pain is None:
             continue
         try:

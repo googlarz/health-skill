@@ -337,7 +337,7 @@ class GreetingTests(unittest.TestCase):
         from datetime import timedelta
         p = load_profile(self.root, "p1")
         p["daily_checkins"] = [
-            {"date": str(date.today() - timedelta(days=i)), "pain": 8.0,
+            {"date": str(date.today() - timedelta(days=i)), "pain_severity": 8.0,
              "mood": 6, "sleep_hours": 7, "energy": 5}
             for i in range(5)
         ]
@@ -351,7 +351,7 @@ class GreetingTests(unittest.TestCase):
         p = load_profile(self.root, "p1")
         p["daily_checkins"] = [
             {"date": str(date.today() - timedelta(days=7)),
-             "mood": 7, "sleep_hours": 6.0, "energy": 6, "pain": 1}
+             "mood": 7, "sleep_hours": 6.0, "energy": 6, "pain_severity": 1}
         ]
         self._save(p)
         g = build_greeting(self.root, "p1")
@@ -375,7 +375,7 @@ class GreetingTests(unittest.TestCase):
         p = load_profile(self.root, "p1")
         p["daily_checkins"] = [
             {"date": str(date.today() - timedelta(days=i)),
-             "mood": 3.0, "energy": 2.5, "sleep_hours": 6, "pain": 1}
+             "mood": 3.0, "energy": 2.5, "sleep_hours": 6, "pain_severity": 1}
             for i in range(10)
         ]
         self._save(p)

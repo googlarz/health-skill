@@ -77,6 +77,8 @@ DEFAULT_PROFILE = {
     "supplements": [],  # supplements/nutraceuticals (name, dose, frequency)
     "interventions": [],  # named lifestyle interventions with protocols & outcome metrics
     "diagnostic_reports": [],  # narrative reports (radiology, pathology) from FHIR DiagnosticReport
+    "appointments": [],  # upcoming appointments (add-appointment / pre-visit)
+    "pharmacogenomics": {},  # imported PGX genotype phenotypes (import-pgx)
     "preferences": {
         "summary_style": "concise",
         "weight_unit": "kg",

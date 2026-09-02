@@ -76,6 +76,7 @@ def _import_apple_xml(root: Path, person_id: str, xml_path: Path, max_records: i
     daily_buckets: dict[tuple[str, date], list[float]] = {}  # (metric, day) -> values for averaging
     bp_pairs: dict[date, dict[str, float]] = {}
     sleep_per_day: dict[date, float] = {}
+    inbed_per_day: dict[date, float] = {}  # fallback for exports with only InBed records
 
     parsed = 0
     for _, elem in ET.iterparse(str(xml_path), events=("end",)):
@@ -115,7 +116,12 @@ def _import_apple_xml(root: Path, person_id: str, xml_path: Path, max_records: i
         elif kind == "bp":
             bp_pairs.setdefault(d, {})[metric] = value
         elif kind == "sleep":
-            # Sleep records have start/end; sum minutes asleep per day
+            # SleepAnalysis records carry a category in `value` (InBed / Awake /
+            # AsleepCore / AsleepDeep / AsleepREM / legacy Asleep). InBed spans
+            # OVERLAP the asleep-stage spans, so summing everything double-counts
+            # a normal night into ~15h. Count only Asleep* spans; keep InBed
+            # separately as a fallback for old exports that log nothing else.
+            category = elem.get("value", "")
             try:
                 start_dt = datetime.strptime(start[:19], "%Y-%m-%d %H:%M:%S")
                 end_dt = datetime.strptime(end[:19], "%Y-%m-%d %H:%M:%S")
@@ -123,7 +129,11 @@ def _import_apple_xml(root: Path, person_id: str, xml_path: Path, max_records: i
             except ValueError:
                 hours = 0.0
             if hours > 0:
-                sleep_per_day[d] = sleep_per_day.get(d, 0.0) + hours
+                if "Asleep" in category:
+                    sleep_per_day[d] = sleep_per_day.get(d, 0.0) + hours
+                elif "InBed" in category or not category:
+                    inbed_per_day[d] = inbed_per_day.get(d, 0.0) + hours
+                # "Awake" spans are intentionally not counted
 
         parsed += 1
         elem.clear()
@@ -148,6 +158,11 @@ def _import_apple_xml(root: Path, person_id: str, xml_path: Path, max_records: i
             record_vital(root, person_id, d.isoformat(), "blood_pressure",
                          f"{int(sys)}/{int(dia)}", "mmHg", "Apple Health")
             counts["blood_pressure"] = counts.get("blood_pressure", 0) + 1
+
+    # Days with only InBed data (no asleep stages) fall back to InBed duration
+    for d, hours in inbed_per_day.items():
+        if d not in sleep_per_day:
+            sleep_per_day[d] = hours
 
     # Flush sleep into checkins
     if sleep_per_day:

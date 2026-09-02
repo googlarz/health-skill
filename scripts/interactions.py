@@ -16,6 +16,8 @@ Usage:
 
 from __future__ import annotations
 
+import re
+
 from datetime import date
 from typing import Any
 
@@ -87,7 +89,7 @@ DRUG_DRUG: list[dict[str, Any]] = [
     },
     # ── Statins ──────────────────────────────────────────────────────────────
     {
-        "a": ["statin", "simvastatin", "lovastatin", "atorvastatin", "rosuvastatin",
+        "a": ["vastatin", "simvastatin", "lovastatin", "atorvastatin", "rosuvastatin",
               "pravastatin", "fluvastatin"],
         "b": ["clarithromycin", "erythromycin", "azithromycin", "itraconazole",
               "ketoconazole", "fluconazole", "cyclosporine", "gemfibrozil"],
@@ -97,7 +99,7 @@ DRUG_DRUG: list[dict[str, Any]] = [
         "mechanism": "These drugs inhibit CYP3A4, the enzyme that metabolises most statins, causing statin accumulation.",
     },
     {
-        "a": ["statin", "simvastatin", "lovastatin", "atorvastatin", "rosuvastatin"],
+        "a": ["vastatin", "simvastatin", "lovastatin", "atorvastatin", "rosuvastatin"],
         "b": ["amiodarone"],
         "severity": "moderate",
         "effect": "Increased statin levels — myopathy risk",
@@ -116,7 +118,7 @@ DRUG_DRUG: list[dict[str, Any]] = [
     # ── ACE inhibitors / ARBs ────────────────────────────────────────────────
     {
         "a": ["ace inhibitor", "lisinopril", "ramipril", "enalapril", "perindopril",
-              "captopril", "arb", "losartan", "valsartan", "candesartan", "olmesartan"],
+              "captopril", "sartan", "losartan", "valsartan", "candesartan", "olmesartan"],
         "b": ["ibuprofen", "naproxen", "nsaid", "indomethacin", "diclofenac", "celecoxib"],
         "severity": "major",
         "effect": "Reduced antihypertensive effect + acute kidney injury risk",
@@ -125,7 +127,7 @@ DRUG_DRUG: list[dict[str, Any]] = [
     },
     {
         "a": ["ace inhibitor", "lisinopril", "ramipril", "enalapril", "captopril",
-              "arb", "losartan", "valsartan"],
+              "sartan", "losartan", "valsartan"],
         "b": ["potassium", "spironolactone", "eplerenone", "triamterene", "amiloride"],
         "severity": "major",
         "effect": "Hyperkalaemia (dangerously high potassium) — cardiac arrhythmia risk",
@@ -173,7 +175,7 @@ DRUG_DRUG: list[dict[str, Any]] = [
     {
         "a": ["lithium"],
         "b": ["ace inhibitor", "lisinopril", "ramipril", "enalapril",
-              "arb", "losartan", "valsartan", "thiazide", "hydrochlorothiazide"],
+              "sartan", "losartan", "valsartan", "thiazide", "hydrochlorothiazide"],
         "severity": "major",
         "effect": "Lithium toxicity — reduced renal clearance causes accumulation",
         "action": "Monitor lithium levels closely when starting or changing these medications.",
@@ -226,7 +228,7 @@ DRUG_DRUG: list[dict[str, Any]] = [
 SUPPLEMENT_DRUG: list[dict[str, Any]] = [
     {
         "supplement": ["natto", "fermented soy", "nattokinase"],
-        "medication": ["arb", "candesartan", "losartan", "valsartan", "olmesartan",
+        "medication": ["sartan", "candesartan", "losartan", "valsartan", "olmesartan",
                        "ace inhibitor", "lisinopril", "ramipril", "enalapril",
                        "spironolactone", "eplerenone"],
         "severity": "moderate",
@@ -246,7 +248,7 @@ SUPPLEMENT_DRUG: list[dict[str, Any]] = [
     {
         "supplement": ["beetroot", "beet", "beetroot extract", "beet juice", "red beet"],
         "medication": ["amlodipine", "nifedipine", "felodipine", "calcium channel",
-                       "candesartan", "losartan", "valsartan", "arb",
+                       "candesartan", "losartan", "valsartan", "sartan",
                        "lisinopril", "ramipril", "ace inhibitor",
                        "metoprolol", "bisoprolol", "beta-blocker",
                        "antihypertensive", "blood pressure"],
@@ -312,7 +314,15 @@ DRUG_CONDITION: list[dict[str, Any]] = [
 
 def _med_matches(med_name: str, keywords: list[str]) -> bool:
     n = med_name.lower()
-    return any(kw in n or n.startswith(kw) for kw in keywords)
+    for kw in keywords:
+        if len(kw) <= 4:
+            # Short class tokens ("iron", "ppi") must start a word: bare substring
+            # matching made "iron" fire inside spironolactone-style names.
+            if re.search(rf"(?<![a-z]){re.escape(kw)}", n):
+                return True
+        elif kw in n:
+            return True
+    return False
 
 
 def _any_med_matches(medications: list[dict[str, Any]], keywords: list[str]) -> list[str]:

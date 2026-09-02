@@ -85,13 +85,16 @@ def parse_cycle_event(text: str) -> dict[str, Any]:
         "symptoms": [],
     }
 
-    if re.search(r"\bperiod\s+(?:started|starting|begun|begin|began)\b", t) or \
-       re.search(r"\bstarted\s+(?:my\s+)?period\b", t) or \
-       (re.search(r"\bstarted\b", t) and "period" in t):
-        result["event_type"] = "period_started"
-    elif re.search(r"\bperiod\s+(?:ended|over|finished|stopped|done)\b", t) or \
-         re.search(r"\bended\s+(?:my\s+)?period\b", t):
+    # "ended" checked first: the started catch-all below fires on any text with
+    # both "started" and "period" in it, which used to misclassify inputs like
+    # "period ended today, cramps started last night" as a NEW cycle start.
+    if re.search(r"\bperiod\s+(?:ended|over|finished|stopped|done)\b", t) or \
+       re.search(r"\bended\s+(?:my\s+)?period\b", t):
         result["event_type"] = "period_ended"
+    elif re.search(r"\bperiod\s+(?:started|starting|begun|begin|began)\b", t) or \
+         re.search(r"\bstarted\s+(?:my\s+)?period\b", t) or \
+         (re.search(r"\bstarted\b", t) and "period" in t):
+        result["event_type"] = "period_started"
     elif "ovulation" in t or "ovulating" in t:
         result["event_type"] = "ovulation"
     else:

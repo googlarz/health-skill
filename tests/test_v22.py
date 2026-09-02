@@ -132,10 +132,10 @@ class SideEffectTests(unittest.TestCase):
         checkins = []
         for i in range(30, start_offset_days + 10):
             d = (date.today() - timedelta(days=i)).isoformat()
-            checkins.append({"date": d, "mood": 7, "energy": 7, "pain": pain_before, "sleep_hours": 7})
+            checkins.append({"date": d, "mood": 7, "energy": 7, "pain_severity": pain_before, "sleep_hours": 7})
         for i in range(start_offset_days - 1, 0, -1):
             d = (date.today() - timedelta(days=i)).isoformat()
-            checkins.append({"date": d, "mood": 6, "energy": 6, "pain": pain_after, "sleep_hours": 7})
+            checkins.append({"date": d, "mood": 6, "energy": 6, "pain_severity": pain_after, "sleep_hours": 7})
         return {
             "medications": [{"name": med_name, "start_date": start}],
             "daily_checkins": checkins,
@@ -191,7 +191,7 @@ class MonthlyReportTests(unittest.TestCase):
         for i in range(15):
             d = (date.today() - timedelta(days=i)).isoformat()
             profile.setdefault("daily_checkins", []).append({
-                "date": d, "mood": 7, "energy": 6, "pain": 2, "sleep_hours": 7.5
+                "date": d, "mood": 7, "energy": 6, "pain_severity": 2, "sleep_hours": 7.5
             })
         save_profile(self.root, "me", profile)
         profile = load_profile(self.root, "me")

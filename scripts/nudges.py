@@ -41,7 +41,7 @@ def compute_nudges(root: Path, person_id: str) -> list[dict[str, Any]]:
     nudges: list[dict[str, Any]] = []
 
     # Overdue follow-ups
-    for f in p.get("follow_ups", []):
+    for f in p.get("follow_up", []):
         if f.get("status") == "completed":
             continue
         due = _parse_date(f.get("due_date", ""))
@@ -255,7 +255,7 @@ def _pattern_alerts(
             })
 
     # ── Consistently high pain (avg ≥5 for 7+ days) ──────────────────────────
-    pain_vals_7 = [float(c["pain"]) for c in recent_7 if c.get("pain") is not None]
+    pain_vals_7 = [float(c["pain_severity"]) for c in recent_7 if c.get("pain_severity") is not None]
     if len(pain_vals_7) >= 4:
         avg_pain = sum(pain_vals_7) / len(pain_vals_7)
         if avg_pain >= 5.0:

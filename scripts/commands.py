@@ -1955,7 +1955,7 @@ def _command_status(args: argparse.Namespace) -> int:
     # Overdue follow-ups
     from datetime import datetime
     overdue = 0
-    for f in profile.get("follow_ups", []):
+    for f in profile.get("follow_up", []):
         if f.get("status") == "completed":
             continue
         try:
@@ -2426,7 +2426,10 @@ def _command_pgx_report(args: argparse.Namespace) -> int:
     if not pgx_data:
         print("No pharmacogenomics data in profile. Run import-pgx first.")
         return 1
-    from scripts.pharmacogenomics import pgx_drug_alerts
+    try:
+        from .pharmacogenomics import pgx_drug_alerts
+    except ImportError:
+        from pharmacogenomics import pgx_drug_alerts  # type: ignore
     phenotypes = pgx_data.get("phenotypes", {})
     alerts = pgx_drug_alerts(phenotypes, profile.get("medications", []))
     variants_found = pgx_data.get("variants_found", 0)

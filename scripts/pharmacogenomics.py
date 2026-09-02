@@ -248,7 +248,10 @@ def _call_cyp2c19(variants: dict[str, str]) -> dict[str, str]:
         phenotype = "poor_metaboliser"
         label = "Poor metaboliser (PM)"
         implication = "Significantly reduced CYP2C19 activity."
-    elif lof_count == 1 and gof_count == 0:
+    elif lof_count == 1:
+        # One LoF allele = IM even when a *17 gain allele is also present:
+        # CPIC classifies *2/*17 as intermediate — *17 does not restore the
+        # function lost to *2, so the gain allele must not mask the LoF call.
         phenotype = "intermediate_metaboliser"
         label = "Intermediate metaboliser (IM)"
         implication = "Moderately reduced CYP2C19 activity."

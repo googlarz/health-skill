@@ -51,7 +51,7 @@ SIDE_EFFECT_PROFILES: list[dict[str, Any]] = [
     },
     # Statins — muscle pain
     {
-        "medication": ["statin", "simvastatin", "atorvastatin", "rosuvastatin", "pravastatin", "lovastatin"],
+        "medication": ["vastatin", "simvastatin", "atorvastatin", "rosuvastatin", "pravastatin", "lovastatin"],
         "watch": {"pain": "muscle pain", "notes_keywords": ["muscle", "myalgia", "cramp", "ache", "weakness", "tired", "fatigue"]},
         "window_days": 90,
         "effect_name": "Statin myalgia",
@@ -172,8 +172,10 @@ def _analyse_medication(
 
     # Numeric fields
     for field, label in [(k, v) for k, v in watch.items() if k != "notes_keywords"]:
-        before_avg = _avg_field(before_checkins, field)
-        after_avg = _avg_field(after_checkins, field)
+        # check-ins store pain under "pain_severity" (parse_checkin), not "pain"
+        checkin_key = "pain_severity" if field == "pain" else field
+        before_avg = _avg_field(before_checkins, checkin_key)
+        after_avg = _avg_field(after_checkins, checkin_key)
         if before_avg is None or after_avg is None:
             continue
         delta = after_avg - before_avg

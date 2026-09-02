@@ -59,7 +59,8 @@ def build_pre_visit_brief(profile: dict[str, Any], appointment: dict[str, Any]) 
         lines.append("## Allergies")
         for a in allergies:
             reaction = a.get("reaction", "")
-            lines.append(f"- {a['name']}" + (f" ({reaction})" if reaction else ""))
+            substance = a.get("substance") or a.get("name") or "unknown allergen"
+            lines.append(f"- {substance}" + (f" ({reaction})" if reaction else ""))
         lines.append("")
 
     # Recent labs (last 12 months)
@@ -147,9 +148,14 @@ def write_appointment_alerts(profile: dict[str, Any]) -> list[dict[str, Any]]:
 def _recent_labs(profile: dict[str, Any], months: int = 12) -> list[dict[str, Any]]:
     cutoff = (date.today() - timedelta(days=months * 30)).isoformat()
     labs = []
-    for entry in profile.get("lab_results", []):
+    for entry in profile.get("recent_tests", []):
         if entry.get("date", "") >= cutoff:
-            labs.append(entry)
+            labs.append({
+                "marker": entry.get("name", ""),
+                "value": entry.get("value", ""),
+                "unit": entry.get("unit", ""),
+                "date": entry.get("date", ""),
+            })
     return sorted(labs, key=lambda x: x.get("date", ""), reverse=True)
 
 
@@ -161,7 +167,7 @@ def _recent_checkin_summary(profile: dict[str, Any], days: int = 7) -> str:
     avg = lambda key: sum(c.get(key, 0) for c in checkins) / len(checkins)
     mood = avg("mood")
     energy = avg("energy")
-    pain = avg("pain")
+    pain = avg("pain_severity")
     sleep = avg("sleep_hours")
     parts = []
     if mood:
@@ -229,18 +235,25 @@ def _outstanding_concerns(profile: dict[str, Any]) -> list[str]:
     cutoff = (date.today() - timedelta(days=14)).isoformat()
     recent = [c for c in profile.get("daily_checkins", []) if c.get("date", "") >= cutoff]
     if recent:
-        avg_pain = sum(c.get("pain", 0) for c in recent) / len(recent)
+        avg_pain = sum(c.get("pain_severity", 0) for c in recent) / len(recent)
         avg_mood = sum(c.get("mood", 5) for c in recent) / len(recent)
         if avg_pain >= 5:
             concerns.append(f"Ongoing pain (avg {avg_pain:.1f}/10 over 14 days)")
         if avg_mood <= 4:
             concerns.append(f"Low mood (avg {avg_mood:.1f}/10 over 14 days)")
 
-    # Overdue preventive care
-    today_str = date.today().isoformat()
-    for item in profile.get("preventive_care", []):
-        if item.get("next_due", "9999") <= today_str and item.get("overdue"):
-            concerns.append(f"Overdue: {item.get('name', 'preventive screen')}")
+    # Overdue preventive care — computed from screening rules, not a stored key
+    # (the old "preventive_care" profile key never existed in the schema)
+    try:
+        try:
+            from .preventive import compute_due_screenings
+        except ImportError:
+            from preventive import compute_due_screenings  # type: ignore
+        for item in compute_due_screenings(profile):
+            if item.get("status") == "overdue":
+                concerns.append(f"Overdue: {item.get('name', 'preventive screen')}")
+    except Exception:
+        pass
 
     # Notes/concerns logged by user
     for note in profile.get("notes", [])[-3:]:

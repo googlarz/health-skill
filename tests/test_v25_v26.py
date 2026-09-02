@@ -201,7 +201,7 @@ class MensHealthTests(unittest.TestCase):
         profile = self._profile(45)
         profile["daily_checkins"] = [
             {"date": (date.today() - timedelta(days=i)).isoformat(),
-             "mood": 3.0, "energy": 2.5, "pain": 2, "sleep_hours": 6}
+             "mood": 3.0, "energy": 2.5, "pain_severity": 2, "sleep_hours": 6}
             for i in range(14)
         ]
         result = score_testosterone_symptoms(profile)
@@ -212,7 +212,7 @@ class MensHealthTests(unittest.TestCase):
         profile = self._profile(45)
         profile["daily_checkins"] = [
             {"date": (date.today() - timedelta(days=i)).isoformat(),
-             "mood": 8.0, "energy": 8.0, "pain": 1, "sleep_hours": 7.5}
+             "mood": 8.0, "energy": 8.0, "pain_severity": 1, "sleep_hours": 7.5}
             for i in range(14)
         ]
         result = score_testosterone_symptoms(profile)
