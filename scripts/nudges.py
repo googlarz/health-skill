@@ -15,6 +15,7 @@ try:
         atomic_write_text,
         load_profile,
         load_snapshot,
+        load_weight_entries,
         nudges_path,
     )
 except ImportError:
@@ -22,6 +23,7 @@ except ImportError:
         atomic_write_text,
         load_profile,
         load_snapshot,
+        load_weight_entries,
         nudges_path,
     )
 
@@ -122,8 +124,9 @@ def compute_nudges(root: Path, person_id: str) -> list[dict[str, Any]]:
             "action": "Run process-inbox to extract data.",
         })
 
-    # Staleness on profile
-    last_session = (p.get("session_history") or [{}])[-1].get("ended_at", "")
+    # Staleness on profile — audit.updated_at is stamped on every save; the old
+    # "session_history" key never existed in the schema, so this nudge was dead
+    last_session = str((p.get("audit") or {}).get("updated_at", ""))
     last_dt = _parse_date(last_session[:10]) if last_session else None
     if last_dt and (today - last_dt).days >= 14:
         nudges.append({
@@ -216,17 +219,23 @@ def _pattern_alerts(
             })
 
     # ── Rapid weight gain (>2 kg in 14 days) ─────────────────────────────────
-    # Weight entries are in care_workspace; check from profile if available
-    weight_series = p.get("weight_series") or []
+    # Weight lives in the metrics DB (entry_date/value), not in the profile —
+    # the old "weight_series" profile key never existed, so this alert was dead.
+    weight_series: list[dict[str, Any]] = []
+    if root is not None:
+        try:
+            weight_series = load_weight_entries(root, person_id)
+        except Exception:
+            weight_series = []
     if len(weight_series) >= 2:
         recent_w = [
             w for w in weight_series
-            if _parse_date(w.get("date", "")) and
-               (today - _parse_date(w.get("date", ""))).days <= 14  # type: ignore[operator]
+            if _parse_date(w.get("entry_date", "")) and
+               (today - _parse_date(w.get("entry_date", ""))).days <= 14  # type: ignore[operator]
         ]
         if len(recent_w) >= 3:
             try:
-                kg_vals = [float(w["kg"]) for w in sorted(recent_w, key=lambda x: x.get("date", "")) if w.get("kg")]
+                kg_vals = [float(w["value"]) for w in sorted(recent_w, key=lambda x: x.get("entry_date", "")) if w.get("value")]
                 delta = kg_vals[-1] - kg_vals[0]
                 if delta >= 2.0:
                     alerts.append({

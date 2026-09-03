@@ -182,12 +182,15 @@ def build_recap(root: Path, person_id: str, days: int = 7) -> str:
     lines.append("")
     docs = []
     for d in p.get("documents", []):
-        dt = _parse_date(d.get("ingested_at", "")[:10])
+        # documents are written with title/doc_type/source_date; prepare_record
+        # stamps last_updated at ingest time — that's the "when processed" signal
+        stamp = str(d.get("last_updated") or d.get("source_date") or "")
+        dt = _parse_date(stamp[:10])
         if dt and dt >= cutoff:
             docs.append(d)
     if docs:
         for d in docs[:5]:
-            lines.append(f"- {d.get('label', d.get('filename', 'document'))} ({d.get('document_type', '')})")
+            lines.append(f"- {d.get('title', 'document')} ({d.get('doc_type', '')})")
     else:
         lines.append("- No new documents this week.")
     lines.append("")

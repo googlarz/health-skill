@@ -54,7 +54,6 @@ except ImportError:
 # FHIR Observation codes → internal metric names
 LOINC_TO_METRIC: dict[str, tuple[str, str]] = {
     # Lipids
-    "2093-3":  ("LDL", "mg/dL"),
     "18262-6": ("LDL", "mg/dL"),
     "2085-9":  ("HDL", "mg/dL"),
     "2089-1":  ("LDL", "mg/dL"),
@@ -68,6 +67,7 @@ LOINC_TO_METRIC: dict[str, tuple[str, str]] = {
     "3016-3":  ("TSH", "mIU/L"),
     "3051-0":  ("Free T3", "pg/mL"),
     "3054-4":  ("Free T4", "ng/dL"),
+    "3024-7":  ("Free T4", "ng/dL"),
     # Kidney
     "2160-0":  ("Creatinine", "mg/dL"),
     "33914-3": ("eGFR", "mL/min/1.73m²"),
@@ -88,7 +88,7 @@ LOINC_TO_METRIC: dict[str, tuple[str, str]] = {
     "30522-7": ("hsCRP", "mg/L"),
     # Hormones
     "2986-8":  ("Testosterone", "ng/dL"),
-    "2243-4":  ("FSH", "mIU/mL"),
+    "15067-2": ("FSH", "mIU/mL"),
     "10334-1": ("LH", "mIU/mL"),
     "2243-4":  ("Estradiol", "pg/mL"),
     # Vitals (observations)

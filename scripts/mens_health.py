@@ -420,7 +420,7 @@ def _testosterone_findings(profile: dict[str, Any]) -> str:
     lines: list[str] = []
     symptom_result = score_testosterone_symptoms(profile)
 
-    labs = {lr["marker"].lower(): lr for lr in profile.get("lab_results", [])}
+    labs = {str(lr.get("name", "")).lower(): lr for lr in profile.get("recent_tests", [])}
     total_t = labs.get("total testosterone") or labs.get("testosterone, total") or labs.get("testosterone")
 
     if total_t:
@@ -457,9 +457,9 @@ def _testosterone_findings(profile: dict[str, Any]) -> str:
 
 def _psa_section(profile: dict[str, Any], age: int) -> str:
     lines: list[str] = []
-    labs = profile.get("lab_results", [])
+    labs = profile.get("recent_tests", [])
     psa_labs = sorted(
-        [lr for lr in labs if "psa" in lr.get("marker", "").lower()],
+        [lr for lr in labs if "psa" in str(lr.get("name", "")).lower()],
         key=lambda x: x.get("date", ""),
     )
 
@@ -548,10 +548,12 @@ def _cv_risk_section(profile: dict[str, Any]) -> str:
 
 def _preventive_gaps(profile: dict[str, Any], age: int) -> str:
     lines: list[str] = []
+    # logged screenings live under "screenings" (the old "preventive_care"
+    # profile key never existed in the schema)
     completed = {
-        item.get("name", "").lower()
-        for item in profile.get("preventive_care", [])
-        if not item.get("overdue", False)
+        str(item.get("name", "")).lower()
+        for item in profile.get("screenings", [])
+        if item.get("status") == "up_to_date"
     }
 
     for screen_key, data in MALE_PREVENTIVE_SCHEDULE.items():

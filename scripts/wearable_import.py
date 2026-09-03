@@ -329,7 +329,7 @@ def _import_csv(root: Path, person_id: str, csv_path: Path) -> dict[str, int]:
             d = row.get("date") or row.get("Date") or ""
             metric = (row.get("metric") or row.get("Metric") or "").strip().lower()
             try:
-                value = float(row.get("value") or row.get("Value") or "")
+                value = float((row.get("value") or row.get("Value") or "").replace(",", ""))
             except (TypeError, ValueError):
                 continue
             unit = (row.get("unit") or row.get("Unit") or "").strip()

@@ -80,8 +80,14 @@ def assess(answers: dict[str, str]) -> dict[str, Any]:
     m = re.search(r"\b(\d+)\s*/\s*10\b", combined)
     if m:
         severity = int(m.group(1))
-    elif "worst" in combined or "unbearable" in combined:
-        severity = 10
+    else:
+        # q3 asks "Severity 1-10, ..." — accept a bare number ("8, constant"),
+        # which previously scored 0 and dropped the band to "Education only".
+        m2 = re.search(r"\b(10|[0-9])\b", str(answers.get("q3", "")))
+        if m2:
+            severity = int(m2.group(1))
+        elif "worst" in combined or "unbearable" in combined:
+            severity = 10
 
     # Trajectory
     worsening = any(w in combined for w in ("getting worse", "worsening", "progressing", "increasing"))
@@ -90,7 +96,9 @@ def assess(answers: dict[str, str]) -> dict[str, Any]:
     if flags:
         band = "Emergency now"
     elif severity >= 8 and worsening:
-        band = "Urgent same day"
+        # severe AND worsening escalates above plain "urgent" — this branch
+        # previously assigned the same band as the next one (dead escalation)
+        band = "Emergency now"
     elif severity >= 6 or worsening:
         band = "Urgent same day"
     elif severity >= 3:

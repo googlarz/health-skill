@@ -247,9 +247,17 @@ def screening_intensity_decision(profile: dict[str, Any]) -> dict[str, Any]:
     notes: list[str] = []
     questions: list[str] = []
 
+    def _age_or_999(f: dict) -> float:
+        # household cascade writes age_at_diagnosis: "" when unknown — float("")
+        # crashed this decision aid for exactly the users it exists for
+        try:
+            return float(f.get("age_at_diagnosis") or 999)
+        except (TypeError, ValueError):
+            return 999.0
+
     if sex == "female":
         if breast_fh:
-            youngest = min((float(f.get("age_at_diagnosis", 999)) for f in breast_fh), default=999)
+            youngest = min((_age_or_999(f) for f in breast_fh), default=999)
             recommended_start = max(30, youngest - 10) if youngest < 999 else 35
             notes.append(f"Family breast cancer history → consider starting mammogram around age {recommended_start:.0f}.")
             if age >= recommended_start - 2:
@@ -258,7 +266,7 @@ def screening_intensity_decision(profile: dict[str, Any]) -> dict[str, Any]:
                 questions.append("Is genetic testing (BRCA1/BRCA2, panel) worth it for me?")
 
     if colon_fh:
-        youngest = min((float(f.get("age_at_diagnosis", 999)) for f in colon_fh), default=999)
+        youngest = min((_age_or_999(f) for f in colon_fh), default=999)
         recommended_start = max(30, youngest - 10) if youngest < 999 else 40
         notes.append(f"Family colon cancer history → consider starting colonoscopy around age {recommended_start:.0f}.")
         if age >= recommended_start - 2:

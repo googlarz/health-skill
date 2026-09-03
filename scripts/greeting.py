@@ -220,7 +220,7 @@ def build_greeting(root: Path, person_id: str) -> str:
         gap = _days_ago(last_date) if last_date else None
         if gap is not None and gap <= 1:
             mood = checkins[-1].get("mood")
-            mood_str = f" You logged mood {mood}/10 — " if mood else " "
+            mood_str = f" You logged mood {mood}/10 — " if mood is not None else " "
             return (
                 f"{hi}{mood_str}how are things going today? Anything you'd like to focus on?"
             )

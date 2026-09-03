@@ -157,7 +157,7 @@ def build_monthly_report(profile: dict[str, Any], root: Path, person_id: str) ->
             month_workouts.append(w)
 
     if month_workouts:
-        total_min = sum(w.get("duration", 0) or 0 for w in month_workouts)
+        total_min = sum(w.get("duration_min", 0) or 0 for w in month_workouts)
         by_type: dict[str, int] = {}
         for w in month_workouts:
             t = (w.get("type") or "other").lower()
@@ -173,10 +173,10 @@ def build_monthly_report(profile: dict[str, Any], root: Path, person_id: str) ->
         weight_entries = load_weight_entries(root, person_id)
         month_weights = [
             e for e in weight_entries
-            if start <= datetime.strptime(str(e.get("date", ""))[:10], "%Y-%m-%d").date() <= today
+            if start <= datetime.strptime(str(e.get("entry_date", ""))[:10], "%Y-%m-%d").date() <= today
         ]
         if month_weights:
-            weights = [float(e["kg"]) for e in month_weights if e.get("kg")]
+            weights = [float(e["value"]) for e in month_weights if e.get("value")]
             if len(weights) >= 2:
                 delta = weights[-1] - weights[0]
                 spark = _sparkline(weights)

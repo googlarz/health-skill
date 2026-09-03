@@ -129,7 +129,7 @@ def forecast_marker(
         "projected_value_ci_high": round(ci_high, 2),
         "horizon_days": horizon_days,
         "horizon_date": (today + timedelta(days=horizon_days)).isoformat(),
-        "days_to_target": int(days_to_target) if days_to_target else None,
+        "days_to_target": int(days_to_target) if days_to_target is not None else None,
         "target_value": target_value,
         "confidence": confidence,
     }

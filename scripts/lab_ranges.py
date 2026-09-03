@@ -269,7 +269,12 @@ def _marker_matches(marker: str, target: str) -> bool:
 def _condition_matches(profile_conditions: list[dict[str, Any]], keyword: str) -> bool:
     kw = keyword.lower()
     for c in profile_conditions:
-        if kw in (c.get("name") or "").lower():
+        name = (c.get("name") or "").lower()
+        # "prediabetes" contains "diabetes" but must NOT get the treated-diabetes
+        # adjustments — those LOOSEN targets, exactly wrong for prediabetes.
+        if kw == "diabetes" and ("prediabet" in name or "pre-diabet" in name or "pre diabet" in name):
+            continue
+        if kw in name:
             return True
     return False
 
@@ -278,7 +283,9 @@ def _medication_matches(profile_meds: list[dict[str, Any]], keyword: str) -> boo
     kw = keyword.lower()
     for m in profile_meds:
         name = (m.get("name") or "").lower()
-        if kw in name or name in kw:
+        # no reverse containment: an empty/truncated med name must not match
+        # every adjustment keyword ("" in kw is always True)
+        if name and kw in name:
             return True
     return False
 

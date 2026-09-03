@@ -180,7 +180,7 @@ def render_goals_md(root: Path, person_id: str) -> str:
         cur = current_value(root, person_id, g["metric"])
         pct = progress_pct(g, cur)
         bar_len = 20
-        filled = int((min(pct, 100) / 100) * bar_len) if pct is not None else 0
+        filled = int((max(min(pct, 100), 0) / 100) * bar_len) if pct is not None else 0
         bar = "█" * filled + "░" * (bar_len - filled)
         lines.append(f"## {g['title']}")
         lines.append("")

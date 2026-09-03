@@ -79,6 +79,8 @@ DEFAULT_PROFILE = {
     "diagnostic_reports": [],  # narrative reports (radiology, pathology) from FHIR DiagnosticReport
     "appointments": [],  # upcoming appointments (add-appointment / pre-visit)
     "pharmacogenomics": {},  # imported PGX genotype phenotypes (import-pgx)
+    "meals": [],  # nutrition log entries (log-meal)
+    "visit_history": [],  # post-visit records: raw notes, labs ordered, referrals
     "preferences": {
         "summary_style": "concise",
         "weight_unit": "kg",

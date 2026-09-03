@@ -2827,10 +2827,13 @@ def _render_dashboard_section(
     elif section == "portal_message":
         nf = next_follow_up(profile)
         goal = nf.get("task", "follow-up") if nf else "follow-up"
+        draft = render_portal_message_text(profile, goal)
+        # strip only the duplicate "# Portal Message Draft" heading, keep the body
+        # (the old split("\n", 4)[-1] always yielded "" — the draft never rendered)
+        body = "\n".join(draft.split("\n")[1:]).strip()
         lines.extend([
             "## Quick Portal Message Draft",
-            render_portal_message_text(profile, goal).split("\n", 4)[-1]
-            if "\n" in render_portal_message_text(profile, goal) else "",
+            body,
             "",
         ])
 

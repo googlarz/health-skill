@@ -804,7 +804,7 @@ def build_longevity_dashboard_html(root: Path, person_id: str) -> str:
         mood = [_num(c, "mood") for _, c in ci_recent]
         sleep = [_num(c, "sleep") or _num(c, "sleep_hours") for _, c in ci_recent]
         energy = [_num(c, "energy") for _, c in ci_recent]
-        pain = [_num(c, "pain") for _, c in ci_recent]
+        pain = [_num(c, "pain_severity") for _, c in ci_recent]
         sections.append('<div class="card"><div class="chart-container">')
         sections.append(_chart_line(charts, labels=labels, datasets=[
             {"label": "Mood", "data": mood, "borderColor": "#38bdf8", "fill": False},
