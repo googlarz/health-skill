@@ -371,8 +371,9 @@ def score_testosterone_symptoms(profile: dict[str, Any]) -> dict[str, Any]:
         if avg_mood < 4.5:
             symptoms_found.append("mood_changes")
 
-    # Check note keywords
-    for note in profile.get("notes", []):
+    # Check free-text keywords — user concerns live in unresolved_questions
+    # (the old "notes" profile key never existed; notes are markdown files)
+    for note in profile.get("unresolved_questions", []):
         text = (note.get("text", "") if isinstance(note, dict) else str(note)).lower()
         for symptom, data in TESTOSTERONE_SYMPTOMS.items():
             for alias in data.get("aliases", []):

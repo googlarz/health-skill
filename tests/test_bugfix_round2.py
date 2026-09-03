@@ -174,5 +174,60 @@ class DecisionsEmptyAgeTests(unittest.TestCase):
         self.assertTrue(result)
 
 
+# ── final 3 ──────────────────────────────────────────────────────────────────
+
+class PreventiveOverrideTests(unittest.TestCase):
+    def _profile(self, condition, age=30):
+        return {
+            "name": "T", "sex": "female", "date_of_birth": "1990-01-01",
+            "conditions": [], "screenings": [],
+            "family_history": [{"relation": "mother", "condition": condition,
+                                "age_at_diagnosis": age}],
+        }
+
+    def test_cervical_override_targets_real_screening(self):
+        from scripts.preventive import family_history_adjustments
+        overrides = family_history_adjustments(self._profile("cervical cancer", 30))
+        self.assertIn("cervical_cancer_screening", overrides)
+
+    def test_prostate_override_targets_existing_screening(self):
+        from scripts.preventive import RECOMMENDED_SCREENINGS, family_history_adjustments
+        p = self._profile("prostate cancer", 55)
+        p["sex"] = "male"
+        overrides = family_history_adjustments(p)
+        self.assertIn("prostate_screening", overrides)
+        self.assertIn("prostate_screening", RECOMMENDED_SCREENINGS)
+
+
+class OnboardingCycleTests(_WS):
+    def test_fresh_profile_gets_cycle_question(self):
+        from scripts.onboarding import _missing_questions
+        profile = load_profile(self.root, "p1")
+        profile["sex"] = "female"
+        keys = [q.get("key") for q in _missing_questions(profile)]
+        self.assertIn("cycle", keys,
+                      "cycle question never surfaces for a brand-new profile")
+
+    def test_explicit_no_not_reasked(self):
+        from scripts.onboarding import _missing_questions
+        profile = load_profile(self.root, "p1")
+        profile["sex"] = "female"
+        profile["preferences"]["track_cycles"] = False
+        keys = [q.get("key") for q in _missing_questions(profile)]
+        self.assertNotIn("cycle", keys)
+
+
+class MensHealthNotesTests(unittest.TestCase):
+    def test_symptom_keywords_read_from_unresolved_questions(self):
+        from scripts.mens_health import score_testosterone_symptoms
+        profile = {
+            "daily_checkins": [],
+            "unresolved_questions": [{"text": "low energy and low sex drive lately"}],
+        }
+        result = score_testosterone_symptoms(profile)
+        self.assertGreaterEqual(result.get("score", 0), 1,
+                                f"keyword scan found nothing: {result}")
+
+
 if __name__ == "__main__":
     unittest.main()

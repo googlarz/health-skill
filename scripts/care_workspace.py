@@ -89,7 +89,7 @@ DEFAULT_PROFILE = {
         "communication_tone": "calm",
         "preferred_clinicians": [],
         "pdf_page_limit": 10,
-        "track_cycles": False,  # explicit opt-in for period tracking
+        "track_cycles": None,  # None = never asked; True/False = explicit user choice
         "onboarded": False,  # has user seen the welcome flow
     },
     "consents": {

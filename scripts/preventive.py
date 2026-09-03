@@ -37,6 +37,10 @@ RECOMMENDED_SCREENINGS: dict[str, dict[str, Any]] = {
     "mammogram": {"frequency_years": 2, "age_start": 40, "age_end": 75, "sex": "female"},
     "colonoscopy": {"frequency_years": 10, "age_start": 45, "age_end": 75, "sex": "any"},
     "cervical_cancer_screening": {"frequency_years": 3, "age_start": 21, "age_end": 65, "sex": "female"},
+    # PSA discussion — exists primarily so the prostate-cancer family-history
+    # override has a real screening to pull forward (it targeted a key that
+    # didn't exist, silently dropping the adjustment).
+    "prostate_screening": {"frequency_years": 1, "age_start": 50, "age_end": 70, "sex": "male"},
     "skin_check": {"frequency_years": 1, "age_start": 30, "age_end": 99, "sex": "any"},
     "eye_exam": {"frequency_years": 2, "age_start": 18, "age_end": 99, "sex": "any"},
     "dental_cleaning": {"frequency_years": 0.5, "age_start": 0, "age_end": 99, "sex": "any"},
@@ -114,7 +118,7 @@ def family_history_adjustments(profile: dict[str, Any]) -> dict[str, dict[str, A
         "prostate cancer": ("prostate_screening", 40.0),
         "skin cancer":     ("skin_check", 30.0),
         "melanoma":        ("skin_check", 30.0),
-        "cervical cancer": ("cervical_cancer", 18.0),
+        "cervical cancer": ("cervical_cancer_screening", 18.0),
     }
     cardiac_terms = ("heart attack", "myocardial infarction", "stroke", "early cardiac death")
 
