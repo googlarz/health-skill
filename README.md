@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-312%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-353%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.4.0-purple" alt="v2.4.0">
+    <img src="https://img.shields.io/badge/version-2.4.1-purple" alt="v2.4.1">
   </p>
 </p>
 
@@ -399,6 +399,13 @@ about the same?
 
 ## Recent Releases
 
+### v2.4.1 — 33-bug correctness sweep
+- Five adversarial review agents swept all 21k lines; every finding verified against writers/callers before fixing
+- **Resurrected silently-dead features**: appointments, meal log, PGX import, and post-visit history were all destroyed on every save by a schema-whitelist gap
+- **Clinical safety**: INR on warfarin no longer reads "normal" at 5.0; CYP2C19 *2/*17 correctly intermediate; prediabetes no longer inherits loosened diabetes targets; false MAJOR interaction alerts (nystatin-as-statin, carbamazepine-as-ARB) eliminated
+- **Data integrity**: pain readable again in 8 modules, cycle log no longer corrupts predictions, lab documents no longer stamped with the patient's birth date, Apple Health sleep no longer double-counted (~15h nights)
+- 67 new regression tests — **353 total, all passing**
+
 ### v2.4.0 — Safety hardening, FHIR completeness, Garmin import
 - **Pharmacogenomics safety fix** — half-calls, no-call sentinels, and AncestryDNA's split-allele columns could previously be silently coerced into a false "normal" clearance; a strict per-allele coverage check now closes this for every supported gene, with a red-team test suite guarding it
 - **FHIR import completeness** — unrecognized resource types (Procedure, CarePlan, DocumentReference, ...) are no longer silently dropped; `import-fhir` now reports what it couldn't import instead of going quiet, and `DiagnosticReport` (radiology/pathology narratives) is now merged
@@ -465,7 +472,7 @@ See [references/safety-protocol.md](references/safety-protocol.md) for the full 
 ## Tests
 
 ```bash
-python3 -m pytest tests/ -q   # 312 tests, ~2s
+python3 -m pytest tests/ -q   # 353 tests, ~3s
 ```
 
 ## License
