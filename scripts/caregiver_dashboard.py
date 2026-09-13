@@ -11,16 +11,40 @@ from datetime import date
 from pathlib import Path
 
 
+PROFILE_NAMES = ("HEALTH_PROFILE.json", "profile.json")
+
+
+def _is_person_project(candidate: Path) -> bool:
+    return candidate.is_dir() and any((candidate / name).exists() for name in PROFILE_NAMES)
+
+
 def discover_projects(root: Path) -> list[Path]:
     projects = []
     for candidate in sorted(root.iterdir()):
-        if candidate.is_dir() and (candidate / "HEALTH_PROFILE.json").exists():
+        if candidate.name == "people":
+            continue
+        if _is_person_project(candidate):
             projects.append(candidate)
+    people = root / "people"
+    if people.is_dir():
+        projects.extend(c for c in sorted(people.iterdir()) if _is_person_project(c))
     return projects
 
 
 def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _first_existing(project: Path, names: tuple[str, ...]) -> Path:
+    for name in names:
+        if (project / name).exists():
+            return project / name
+    return project / names[0]
+
+
+def load_optional_json(project: Path, names: tuple[str, ...]):
+    path = _first_existing(project, names)
+    return load_json(path) if path.exists() else []
 
 
 def load_weight_entries(project: Path) -> list[dict]:
@@ -46,9 +70,9 @@ def collect_project_rows(root: Path) -> list[dict]:
     project_rows = []
     for project in discover_projects(root):
         try:
-            profile = load_json(project / "HEALTH_PROFILE.json")
-            conflicts = load_json(project / "HEALTH_CONFLICTS.json") if (project / "HEALTH_CONFLICTS.json").exists() else []
-            review_queue = load_json(project / "HEALTH_REVIEW_QUEUE.json") if (project / "HEALTH_REVIEW_QUEUE.json").exists() else []
+            profile = load_json(_first_existing(project, PROFILE_NAMES))
+            conflicts = load_optional_json(project, ("HEALTH_CONFLICTS.json", "conflicts.json"))
+            review_queue = load_optional_json(project, ("HEALTH_REVIEW_QUEUE.json", "review_queue.json"))
             inbox_count = len([p for p in (project / "inbox").iterdir()]) if (project / "inbox").exists() else 0
             open_conflicts = sum(1 for item in conflicts if item.get("status") == "open")
             open_reviews = sum(1 for item in review_queue if item.get("status") == "open")

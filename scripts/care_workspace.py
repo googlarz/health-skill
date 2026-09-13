@@ -186,17 +186,39 @@ def humanize_name(value: str) -> str:
 
 
 def person_dir(root: Path, person_id: str) -> Path:
-    return root if not person_id else root / "people" / person_id
+    if not person_id:
+        return root
+    nested = root / "people" / person_id
+    if nested.is_dir():
+        return nested
+    sibling = root / person_id
+    if sibling.is_dir() and (sibling / "HEALTH_PROFILE.json").exists():
+        return sibling
+    return nested
+
+
+def _person_file(root: Path, person_id: str, flat_name: str, nested_name: str) -> Path:
+    """Resolve a per-person artifact across both supported workspace layouts.
+
+    A sibling-project workspace (root/<person>/) keeps the flat filenames a
+    single-person root uses; a root/people/<id>/ workspace uses the short ones.
+    Prefer whichever already exists so readers work either way, and fall back to
+    the layout implied by person_id so new writes keep their previous location.
+    """
+    directory = person_dir(root, person_id)
+    preferred = nested_name if person_id else flat_name
+    fallback = flat_name if person_id else nested_name
+    if not (directory / preferred).exists() and (directory / fallback).exists():
+        return directory / fallback
+    return directory / preferred
 
 
 def profile_path(root: Path, person_id: str) -> Path:
-    filename = "HEALTH_PROFILE.json" if not person_id else "profile.json"
-    return person_dir(root, person_id) / filename
+    return _person_file(root, person_id, "HEALTH_PROFILE.json", "profile.json")
 
 
 def summary_path(root: Path, person_id: str) -> Path:
-    filename = "HEALTH_SUMMARY.md" if not person_id else "summary.md"
-    return person_dir(root, person_id) / filename
+    return _person_file(root, person_id, "HEALTH_SUMMARY.md", "summary.md")
 
 
 def dossier_path(root: Path, person_id: str) -> Path:
@@ -264,18 +286,15 @@ def assistant_update_path(root: Path, person_id: str) -> Path:
 
 
 def conflicts_path(root: Path, person_id: str) -> Path:
-    filename = "HEALTH_CONFLICTS.json" if not person_id else "conflicts.json"
-    return person_dir(root, person_id) / filename
+    return _person_file(root, person_id, "HEALTH_CONFLICTS.json", "conflicts.json")
 
 
 def review_queue_path(root: Path, person_id: str) -> Path:
-    filename = "HEALTH_REVIEW_QUEUE.json" if not person_id else "review_queue.json"
-    return person_dir(root, person_id) / filename
+    return _person_file(root, person_id, "HEALTH_REVIEW_QUEUE.json", "review_queue.json")
 
 
 def medication_history_path(root: Path, person_id: str) -> Path:
-    filename = "MEDICATION_HISTORY.json" if not person_id else "medication_history.json"
-    return person_dir(root, person_id) / filename
+    return _person_file(root, person_id, "MEDICATION_HISTORY.json", "medication_history.json")
 
 
 def inbox_dir(root: Path, person_id: str) -> Path:
