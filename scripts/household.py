@@ -96,12 +96,37 @@ def add_relationship(root: Path, from_id: str, to_id: str, rel_type: str) -> dic
     return rel
 
 
-# Cancer/cardiac terms that should cascade as family history
+# Cancer/cardiac terms that should cascade as family history.
+#
+# Conditions are recorded in the language of the source report, so a profile
+# built from Chinese records never matched the English-only list and cascaded
+# nothing. Each entry below is an alias for one of the same conditions -- this
+# list deliberately does not widen which conditions are considered heritable.
 CASCADE_TERMS = [
-    "breast cancer", "ovarian cancer", "colon cancer", "colorectal cancer",
-    "prostate cancer", "skin cancer", "melanoma", "cervical cancer",
-    "heart attack", "myocardial infarction", "stroke",
-    "early cardiac death", "diabetes", "alzheimer", "parkinson",
+    # breast cancer
+    "breast cancer", "乳腺癌", "乳癌",
+    # ovarian cancer
+    "ovarian cancer", "卵巢癌",
+    # colon / colorectal cancer
+    "colon cancer", "colorectal cancer", "结肠癌", "直肠癌", "结直肠癌", "大肠癌",
+    # prostate cancer
+    "prostate cancer", "前列腺癌",
+    # skin cancer / melanoma
+    "skin cancer", "melanoma", "皮肤癌", "黑色素瘤",
+    # cervical cancer
+    "cervical cancer", "宫颈癌",
+    # myocardial infarction
+    "heart attack", "myocardial infarction", "心肌梗死", "心肌梗塞", "心梗",
+    # stroke
+    "stroke", "脑卒中", "中风", "脑梗死", "脑梗", "脑出血",
+    # early cardiac death
+    "early cardiac death", "心源性猝死", "猝死",
+    # diabetes
+    "diabetes", "糖尿病",
+    # alzheimer
+    "alzheimer", "阿尔茨海默", "老年痴呆",
+    # parkinson
+    "parkinson", "帕金森",
 ]
 
 
