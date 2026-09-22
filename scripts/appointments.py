@@ -12,6 +12,11 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+try:
+    from .care_workspace import checkin_value
+except ImportError:
+    from care_workspace import checkin_value  # type: ignore
+
 
 # ---------------------------------------------------------------------------
 # Pre-visit brief
@@ -164,11 +169,11 @@ def _recent_checkin_summary(profile: dict[str, Any], days: int = 7) -> str:
     checkins = [c for c in profile.get("daily_checkins", []) if c.get("date", "") >= cutoff]
     if not checkins:
         return ""
-    avg = lambda key: sum(c.get(key, 0) for c in checkins) / len(checkins)
+    avg = lambda field: sum(checkin_value(c, field) or 0 for c in checkins) / len(checkins)
     mood = avg("mood")
     energy = avg("energy")
-    pain = avg("pain_severity")
-    sleep = avg("sleep_hours")
+    pain = avg("pain")
+    sleep = avg("sleep")
     parts = []
     if mood:
         parts.append(f"Mood avg {mood:.1f}/10")
@@ -235,7 +240,7 @@ def _outstanding_concerns(profile: dict[str, Any]) -> list[str]:
     cutoff = (date.today() - timedelta(days=14)).isoformat()
     recent = [c for c in profile.get("daily_checkins", []) if c.get("date", "") >= cutoff]
     if recent:
-        avg_pain = sum(c.get("pain_severity", 0) for c in recent) / len(recent)
+        avg_pain = sum(checkin_value(c, "pain") or 0 for c in recent) / len(recent)
         avg_mood = sum(c.get("mood", 5) for c in recent) / len(recent)
         if avg_pain >= 5:
             concerns.append(f"Ongoing pain (avg {avg_pain:.1f}/10 over 14 days)")

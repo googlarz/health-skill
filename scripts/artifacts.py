@@ -18,6 +18,7 @@ try:
     from .care_workspace import (
         WorkspaceSnapshot,
         atomic_write_text,
+        checkin_value,
         exports_dir,
         home_path,
         load_snapshot,
@@ -43,6 +44,7 @@ except ImportError:
     from care_workspace import (
         WorkspaceSnapshot,
         atomic_write_text,
+        checkin_value,
         exports_dir,
         home_path,
         load_snapshot,
@@ -796,15 +798,15 @@ def build_longevity_dashboard_html(root: Path, person_id: str) -> str:
     if ci_recent:
         labels = [d.isoformat()[5:] for d, _ in ci_recent]
         def _num(c, key):
-            v = c.get(key)
+            v = checkin_value(c, key)
             try:
                 return float(v) if v is not None else None
             except (TypeError, ValueError):
                 return None
         mood = [_num(c, "mood") for _, c in ci_recent]
-        sleep = [_num(c, "sleep") or _num(c, "sleep_hours") for _, c in ci_recent]
+        sleep = [_num(c, "sleep") for _, c in ci_recent]
         energy = [_num(c, "energy") for _, c in ci_recent]
-        pain = [_num(c, "pain_severity") for _, c in ci_recent]
+        pain = [_num(c, "pain") for _, c in ci_recent]
         sections.append('<div class="card"><div class="chart-container">')
         sections.append(_chart_line(charts, labels=labels, datasets=[
             {"label": "Mood", "data": mood, "borderColor": "#38bdf8", "fill": False},

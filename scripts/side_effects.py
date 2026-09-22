@@ -15,6 +15,11 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any
 
+try:
+    from .care_workspace import checkin_value
+except ImportError:
+    from care_workspace import checkin_value  # type: ignore
+
 # ---------------------------------------------------------------------------
 # Side-effect database
 # Each entry: medication keywords, checkin fields to watch, threshold,
@@ -128,7 +133,7 @@ def _checkins_before(
 
 
 def _avg_field(checkins: list[dict[str, Any]], field: str) -> float | None:
-    vals = [float(c[field]) for c in checkins if c.get(field) is not None]
+    vals = [float(checkin_value(c, field)) for c in checkins if checkin_value(c, field) is not None]
     if not vals:
         return None
     return sum(vals) / len(vals)
@@ -172,10 +177,8 @@ def _analyse_medication(
 
     # Numeric fields
     for field, label in [(k, v) for k, v in watch.items() if k != "notes_keywords"]:
-        # check-ins store pain under "pain_severity" (parse_checkin), not "pain"
-        checkin_key = "pain_severity" if field == "pain" else field
-        before_avg = _avg_field(before_checkins, checkin_key)
-        after_avg = _avg_field(after_checkins, checkin_key)
+        before_avg = _avg_field(before_checkins, field)
+        after_avg = _avg_field(after_checkins, field)
         if before_avg is None or after_avg is None:
             continue
         delta = after_avg - before_avg

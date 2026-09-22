@@ -18,6 +18,11 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+try:
+    from .care_workspace import checkin_value
+except ImportError:
+    from care_workspace import checkin_value  # type: ignore
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -427,8 +432,8 @@ def _trend_chart_data(checkins: list[dict[str, Any]], days: int = 90) -> dict[st
         labels.append(c["date"][5:])   # MM-DD
         mood.append(c.get("mood") or None)
         energy.append(c.get("energy") or None)
-        sleep.append(c.get("sleep_hours") or None)
-        pain.append(c.get("pain_severity") or None)
+        sleep.append(checkin_value(c, "sleep") or None)
+        pain.append(checkin_value(c, "pain") or None)
     return {"labels": labels, "mood": mood, "energy": energy, "sleep": sleep, "pain": pain}
 
 
@@ -493,8 +498,8 @@ def _lab_chart_data(labs: list[dict[str, Any]], profile: dict[str, Any]) -> dict
 
 
 def _overview_cards(checkins: list[dict[str, Any]]) -> dict[str, Any]:
-    def avg(key: str, subset: list) -> float | None:
-        vals = [c.get(key) for c in subset if c.get(key) is not None]
+    def avg(field: str, subset: list) -> float | None:
+        vals = [checkin_value(c, field) for c in subset if checkin_value(c, field) is not None]
         return round(sum(vals) / len(vals), 1) if vals else None
 
     today = date.today()
@@ -503,10 +508,9 @@ def _overview_cards(checkins: list[dict[str, Any]]) -> dict[str, Any]:
                (today - timedelta(days=60)).isoformat() <= c.get("date", "") < (today - timedelta(days=30)).isoformat()]
 
     result: dict[str, Any] = {}
-    for key in ("mood", "energy", "sleep_hours", "pain_severity"):
-        out_key = {"sleep_hours": "sleep", "pain_severity": "pain"}.get(key, key)
-        cur = avg(key, last30)
-        prev = avg(key, prev30)
+    for out_key in ("mood", "energy", "sleep", "pain"):
+        cur = avg(out_key, last30)
+        prev = avg(out_key, prev30)
         result[out_key] = cur
         if cur is not None and prev is not None:
             delta = round(cur - prev, 1)

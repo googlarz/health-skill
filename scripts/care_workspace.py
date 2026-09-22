@@ -172,6 +172,22 @@ def resolve_root(args: argparse.Namespace) -> Path:
     return p
 
 
+_CHECKIN_FIELD_ALIASES = {
+    "pain": "pain_severity",
+    "sleep": "sleep_hours",
+}
+
+
+def checkin_value(checkin: dict[str, Any], field: str) -> Any:
+    """Read a daily-checkin field by its natural short name, resolving to the
+    on-disk key. "pain" and "sleep" store under "pain_severity"/"sleep_hours"
+    (parse_checkin in checkins.py) — this key mismatch was independently
+    reintroduced in 8+ files across three separate bug-fix passes. Use this
+    instead of checkin.get(field) for pain/sleep so a future schema change
+    only needs to update one place."""
+    return checkin.get(_CHECKIN_FIELD_ALIASES.get(field, field))
+
+
 def parse_date(s: Any) -> date | None:
     """Parse a date string tolerantly. Accepts YYYY-MM-DD, YYYY/MM/DD, MM/DD/YYYY,
     and ISO datetime strings (truncated to the date portion).

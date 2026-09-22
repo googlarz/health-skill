@@ -14,6 +14,7 @@ from typing import Any
 try:
     from .care_workspace import (
         atomic_write_text,
+        checkin_value,
         load_profile,
         load_weight_entries,
         load_vital_entries,
@@ -21,6 +22,7 @@ try:
 except ImportError:
     from care_workspace import (  # type: ignore
         atomic_write_text,
+        checkin_value,
         load_profile,
         load_weight_entries,
         load_vital_entries,
@@ -108,15 +110,15 @@ def build_monthly_report(profile: dict[str, Any], root: Path, person_id: str) ->
     if month_checkins:
         lines.append("## Daily check-in trends\n")
         fields = [
-            ("mood",        "Mood",    "/ 10"),
-            ("energy",      "Energy",  "/ 10"),
-            ("pain_severity", "Pain",  "/ 10"),
-            ("sleep_hours", "Sleep",   "h"),
+            ("mood",  "Mood",   "/ 10"),
+            ("energy", "Energy", "/ 10"),
+            ("pain",  "Pain",   "/ 10"),
+            ("sleep", "Sleep",  "h"),
         ]
         highlights: list[str] = []
         for field, label, suffix in fields:
-            this_vals = [float(c[field]) for c in month_checkins if c.get(field) is not None]
-            prev_vals = [float(c[field]) for c in prev_checkins if c.get(field) is not None]
+            this_vals = [float(checkin_value(c, field)) for c in month_checkins if checkin_value(c, field) is not None]
+            prev_vals = [float(checkin_value(c, field)) for c in prev_checkins if checkin_value(c, field) is not None]
             if not this_vals:
                 continue
             avg = _avg(this_vals)
@@ -255,7 +257,7 @@ def _pick_action(
             return f"Prioritise sleep — your average was {avg_sleep:.1f}h this month. Aim for 7+."
 
     # High pain
-    pain_vals = [float(c["pain_severity"]) for c in checkins if c.get("pain_severity") is not None]
+    pain_vals = [float(checkin_value(c, "pain")) for c in checkins if checkin_value(c, "pain") is not None]
     if pain_vals:
         avg_pain = _avg(pain_vals)
         assert avg_pain is not None

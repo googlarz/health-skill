@@ -19,6 +19,7 @@ from typing import Any
 
 try:
     from .care_workspace import (
+        checkin_value,
         load_profile,
         load_vital_entries,
         load_weight_entries,
@@ -26,6 +27,7 @@ try:
     )
 except ImportError:
     from care_workspace import (
+        checkin_value,
         load_profile,
         load_vital_entries,
         load_weight_entries,
@@ -131,7 +133,7 @@ def _detect_sleep_pain(profile: dict[str, Any]) -> dict[str, Any] | None:
     long_sleep_pain = []
     for c in checkins[-60:]:
         sleep = c.get("sleep") or c.get("sleep_hours")
-        pain = c.get("pain_severity")
+        pain = checkin_value(c, "pain")
         if sleep is None or pain is None:
             continue
         try:

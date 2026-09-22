@@ -11,12 +11,12 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .care_workspace import load_profile, load_vital_entries, parse_date
+    from .care_workspace import checkin_value, load_profile, load_vital_entries, parse_date
     from .nudges import compute_nudges
     from .interactions import check_interactions
     from .appointments import get_upcoming_appointments
 except ImportError:
-    from care_workspace import load_profile, load_vital_entries, parse_date  # type: ignore
+    from care_workspace import checkin_value, load_profile, load_vital_entries, parse_date  # type: ignore
     from nudges import compute_nudges  # type: ignore
     from interactions import check_interactions  # type: ignore
     from appointments import get_upcoming_appointments  # type: ignore
@@ -69,7 +69,7 @@ def build_greeting(root: Path, person_id: str) -> str:
         c for c in checkins
         if _parse_date(c.get("date", "")) and _days_ago(_parse_date(c.get("date", ""))) <= 7  # type: ignore[arg-type]
     ]
-    pain_vals = [float(c["pain_severity"]) for c in recent_7 if c.get("pain_severity") is not None]
+    pain_vals = [float(checkin_value(c, "pain")) for c in recent_7 if checkin_value(c, "pain") is not None]
     if len(pain_vals) >= 4 and sum(pain_vals) / len(pain_vals) >= 6.0:
         avg = sum(pain_vals) / len(pain_vals)
         return (

@@ -15,6 +15,7 @@ from typing import Any
 try:
     from .care_workspace import (
         atomic_write_text,
+        checkin_value,
         load_snapshot,
         parse_date,
         recap_path,
@@ -22,6 +23,7 @@ try:
 except ImportError:
     from care_workspace import (  # type: ignore
         atomic_write_text,
+        checkin_value,
         load_snapshot,
         parse_date,
         recap_path,
@@ -125,7 +127,7 @@ def build_recap(root: Path, person_id: str, days: int = 7) -> str:
         moods = [float(c["mood"]) for c in checkins if isinstance(c.get("mood"), (int, float))]
         sleeps = [float(c["sleep_hours"]) for c in checkins if isinstance(c.get("sleep_hours"), (int, float))]
         energies = [float(c["energy"]) for c in checkins if isinstance(c.get("energy"), (int, float))]
-        pains = [float(c["pain_severity"]) for c in checkins if isinstance(c.get("pain_severity"), (int, float))]
+        pains = [float(checkin_value(c, "pain")) for c in checkins if isinstance(checkin_value(c, "pain"), (int, float))]
 
         if moods:
             lines.append(f"- **Mood**: avg {_mean(moods):.1f}/10 {_trend(moods)} ({len(moods)} entries)")
@@ -221,7 +223,7 @@ def build_recap(root: Path, person_id: str, days: int = 7) -> str:
         moods_all = [float(c["mood"]) for c in checkins if isinstance(c.get("mood"), (int, float))]
         sleeps_all = [float(c["sleep_hours"]) for c in checkins if isinstance(c.get("sleep_hours"), (int, float))]
         energies_all = [float(c["energy"]) for c in checkins if isinstance(c.get("energy"), (int, float))]
-        pains_all = [float(c["pain_severity"]) for c in checkins if isinstance(c.get("pain_severity"), (int, float))]
+        pains_all = [float(checkin_value(c, "pain")) for c in checkins if isinstance(checkin_value(c, "pain"), (int, float))]
         if pains_all and (_mean(pains_all) or 0) > 4:
             focus = f"Pain averaging {_mean(pains_all):.1f}/10 — consider running `triage --root .`"
         elif moods_all and (_mean(moods_all) or 10) < 5:
