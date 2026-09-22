@@ -28,14 +28,26 @@ except ImportError:
 # Public API
 # ---------------------------------------------------------------------------
 
-def build_html_report(profile: dict[str, Any]) -> str:
-    """Return a fully self-contained HTML string."""
+def build_html_report(profile: dict[str, Any], weight_entries: list[dict[str, Any]] | None = None) -> str:
+    """Return a fully self-contained HTML string.
+
+    weight_entries: pre-loaded SQLite weight rows (entry_date/value/unit) from
+    load_weight_entries(). Weight lives in the metrics DB, not in `profile` --
+    the old profile.get("weight_entries") here always returned [] since that
+    key never existed in the JSON profile.
+    """
     name = profile.get("name", "Health Dashboard")
     generated = date.today().isoformat()
 
     checkins = _sorted_checkins(profile)
-    weight_entries = _sorted_weight(profile)
-    labs = profile.get("lab_results", [])
+    weight_entries = _sorted_weight(weight_entries)
+    # recent_tests is the real schema key ("lab_results" never existed); _lab_chart_data
+    # expects "marker" (its own long-standing field name), recent_tests stores "name".
+    labs = [
+        {"marker": t.get("name", ""), "value": t.get("value"),
+         "unit": t.get("unit", ""), "date": t.get("date", "")}
+        for t in profile.get("recent_tests", [])
+    ]
     meds = profile.get("medications", [])
     appointments = profile.get("appointments", [])
     conditions = profile.get("conditions", [])
@@ -400,11 +412,17 @@ const BASE = {{
 
 def write_html_report(root: Path, person_id: str, profile: dict[str, Any]) -> Path:
     """Write HTML report to the person's folder. Returns the output path."""
-    from pathlib import Path as P
-    out_dir = P(root) / (person_id or "")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "HEALTH_DASHBOARD.html"
-    html = build_html_report(profile)
+    try:
+        from .care_workspace import html_dashboard_path, load_weight_entries
+    except ImportError:
+        from care_workspace import html_dashboard_path, load_weight_entries  # type: ignore
+    # html_dashboard_path()/person_dir() handles both workspace layouts; a
+    # hand-rolled Path(root)/person_id wrote to the wrong directory under the
+    # root/people/<id>/ layout (same bug class as the pgx-report path fix).
+    out_path = html_dashboard_path(root, person_id)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    weight_entries = load_weight_entries(root, person_id)
+    html = build_html_report(profile, weight_entries)
     out_path.write_text(html, encoding="utf-8")
     return out_path
 
@@ -417,11 +435,16 @@ def _sorted_checkins(profile: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(profile.get("daily_checkins", []), key=lambda c: c.get("date", ""))
 
 
-def _sorted_weight(profile: dict[str, Any]) -> list[dict[str, Any]]:
-    entries = profile.get("weight_entries", [])
+def _sorted_weight(weight_entries: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    entries = weight_entries or []
     if not entries:
         return []
-    return sorted(entries, key=lambda e: e.get("date", ""))
+    # load_weight_entries() rows use entry_date/value; _weight_chart_data expects date/value
+    normalized = [
+        {"date": e.get("entry_date", e.get("date", "")), "value": e.get("value"), "unit": e.get("unit", "kg")}
+        for e in entries
+    ]
+    return sorted(normalized, key=lambda e: e.get("date", ""))
 
 
 def _trend_chart_data(checkins: list[dict[str, Any]], days: int = 90) -> dict[str, Any]:
@@ -430,10 +453,12 @@ def _trend_chart_data(checkins: list[dict[str, Any]], days: int = 90) -> dict[st
     labels, mood, energy, sleep, pain = [], [], [], [], []
     for c in recent:
         labels.append(c["date"][5:])   # MM-DD
-        mood.append(c.get("mood") or None)
-        energy.append(c.get("energy") or None)
-        sleep.append(checkin_value(c, "sleep") or None)
-        pain.append(checkin_value(c, "pain") or None)
+        # NOT "x or None" -- that drops legitimate 0 values (e.g. pain=0, the
+        # best possible reading) as chart gaps instead of plotting them.
+        mood.append(c.get("mood"))
+        energy.append(c.get("energy"))
+        sleep.append(checkin_value(c, "sleep"))
+        pain.append(checkin_value(c, "pain"))
     return {"labels": labels, "mood": mood, "energy": energy, "sleep": sleep, "pain": pain}
 
 

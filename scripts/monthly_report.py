@@ -136,7 +136,7 @@ def build_monthly_report(profile: dict[str, Any], root: Path, person_id: str) ->
             # Highlight notable changes
             if field == "mood" and prev_avg is not None and avg - prev_avg <= -1.5:
                 highlights.append(f"Mood dropped {avg - prev_avg:.1f} points vs last month")
-            if field == "sleep_hours" and prev_avg is not None and avg - prev_avg <= -0.5:
+            if field == "sleep" and prev_avg is not None and avg - prev_avg <= -0.5:
                 highlights.append(f"Sleep shortened by {abs(avg - prev_avg):.1f}h vs last month")
             if field == "pain" and avg >= 4.0:
                 highlights.append(f"Average pain score {avg:.1f}/10 — worth reviewing")

@@ -21,9 +21,9 @@ class HTMLReportTests(unittest.TestCase):
         self.profile["medications"] = [
             {"name": "levothyroxine", "dose": "50mcg", "start_date": "2020-03-15", "active": True}
         ]
-        self.profile["lab_results"] = [
-            {"marker": "TSH", "value": 1.8, "unit": "mIU/L", "date": "2025-01-10"},
-            {"marker": "LDL", "value": 95, "unit": "mg/dL", "date": "2025-01-10"},
+        self.profile["recent_tests"] = [
+            {"name": "TSH", "value": 1.8, "unit": "mIU/L", "date": "2025-01-10"},
+            {"name": "LDL", "value": 95, "unit": "mg/dL", "date": "2025-01-10"},
         ]
         for i in range(30):
             d = (date.today() - timedelta(days=i)).isoformat()

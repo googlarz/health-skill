@@ -380,6 +380,10 @@ def longevity_dashboard_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "LONGEVITY.html"
 
 
+def html_dashboard_path(root: Path, person_id: str) -> Path:
+    return person_dir(root, person_id) / "HEALTH_DASHBOARD.html"
+
+
 def connections_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "CONNECTIONS.md"
 
@@ -2071,12 +2075,7 @@ def intervention_status(root: Path, person_id: str) -> list[dict[str, Any]]:
     return result
 
 
-def _parse_intervention_date(s: str) -> "date | None":
-    try:
-        from datetime import datetime as _dt
-        return _dt.strptime(str(s)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
+_parse_intervention_date = parse_date  # 8th duplicate of parse_date, collapsed here
 
 
 # Sentinel for project-root mode (one person = one folder).

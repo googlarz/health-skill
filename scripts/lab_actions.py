@@ -161,14 +161,23 @@ LAB_KNOWLEDGE: dict[str, dict[str, Any]] = {
 }
 
 
-def _direction_for_marker(marker: str, flag: str) -> str | None:
-    """Convert flag into our 'high' / 'low' bucket, if known."""
+def _direction_for_marker(flag: str, available_directions: set[str]) -> str | None:
+    """Convert flag into our 'high' / 'low' bucket, if known.
+
+    A bare "abnormal" flag (no direction from the source report) used to
+    default to "high" unconditionally — silently dropping every genuinely low
+    result for a low-only marker (HDL, Vitamin D), since "high" isn't in that
+    marker's knowledge dict. If the marker only defines one direction, that's
+    the only actionable interpretation; with both directions defined we can't
+    safely guess, so we report nothing rather than a possibly-wrong direction.
+    """
     flag = (flag or "").lower()
-    if flag in ("high", "abnormal"):
-        # Some abnormal flags are ambiguous — we'll trust 'high' default for most
+    if flag == "high":
         return "high"
     if flag == "low":
         return "low"
+    if flag == "abnormal" and len(available_directions) == 1:
+        return next(iter(available_directions))
     return None
 
 
@@ -188,7 +197,7 @@ def actions_for_lab(test: dict[str, Any]) -> dict[str, Any] | None:
             break
     if not knowledge:
         return None
-    direction = _direction_for_marker(matched_marker or "", str(flag))
+    direction = _direction_for_marker(str(flag), set(knowledge.keys()))
     if not direction or direction not in knowledge:
         return None
     info = knowledge[direction]
