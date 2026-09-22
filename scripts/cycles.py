@@ -194,49 +194,6 @@ def log_cycle_event(root: Path, person_id: str, event: dict[str, Any]) -> dict[s
     return event
 
 
-def predict_next_period(cycles: list[dict[str, Any]]) -> dict[str, Any]:
-    """Predict next period start based on the last ~3 cycle start dates."""
-    if not cycles:
-        return {"predicted_start": "", "avg_cycle_length": 0, "confidence": "low"}
-    sorted_cycles = sorted(
-        [c for c in cycles if c.get("start_date")],
-        key=lambda c: c["start_date"],
-    )
-    if len(sorted_cycles) < 2:
-        return {"predicted_start": "", "avg_cycle_length": 0, "confidence": "low"}
-    recent = sorted_cycles[-4:]  # use up to 3 intervals (4 cycles)
-    diffs: list[int] = []
-    for a, b in zip(recent, recent[1:]):
-        try:
-            da = date.fromisoformat(a["start_date"])
-            db = date.fromisoformat(b["start_date"])
-            diffs.append((db - da).days)
-        except Exception:
-            continue
-    if not diffs:
-        return {"predicted_start": "", "avg_cycle_length": 0, "confidence": "low"}
-    avg = sum(diffs) / len(diffs)
-    try:
-        last_start = date.fromisoformat(sorted_cycles[-1]["start_date"])
-        predicted = (last_start + timedelta(days=round(avg))).isoformat()
-    except Exception:
-        predicted = ""
-    # Confidence based on variance and sample size
-    if len(diffs) >= 3:
-        spread = max(diffs) - min(diffs)
-        confidence = "high" if spread <= 3 else ("medium" if spread <= 7 else "low")
-    elif len(diffs) == 2:
-        confidence = "medium"
-    else:
-        confidence = "low"
-    return {
-        "predicted_start": predicted,
-        "avg_cycle_length": round(avg, 1),
-        "confidence": confidence,
-    }
-
-
-
 
 def command_cycle_log(args: argparse.Namespace) -> int:
     root = resolve_root(args)
