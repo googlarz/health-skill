@@ -21,11 +21,6 @@ except ImportError:
     from care_workspace import upsert_record, load_profile, save_profile, ensure_person, now_utc, resolve_root  # type: ignore
 
 
-PRIVACY_NOTE = (
-    "Cycles data is private. Excluded by default from clinician packets, "
-    "redacted summaries, and caregiver dashboards."
-)
-
 SYMPTOM_WORDS = {
     "cramps": "cramps",
     "cramping": "cramps",
