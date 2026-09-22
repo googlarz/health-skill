@@ -242,6 +242,15 @@ triage --root . \
 
 ---
 
+## Men's health
+
+```bash
+# Testosterone symptom score, PSA/testosterone lab trends, CV risk, preventive gaps
+mens-health --root .
+```
+
+---
+
 ## Household & family
 
 ```bash
@@ -322,6 +331,9 @@ export-calendar --root .
 
 # Backup archive
 backup-project --root .
+
+# Move records older than N months into an archive section (default: 12)
+archive-old-records --root . --max-age-months 24
 ```
 
 ---
@@ -334,6 +346,10 @@ list-review-queue --root .
 
 # Apply all safe auto-extracted items
 apply-review-tier --root . --tier safe_to_auto_apply
+
+# Accept or reject an entire tier at once (bulk decision, not per-item)
+resolve-review-tier --root . --tier needs_quick_confirmation --status accepted
+resolve-review-tier --root . --tier do_not_trust_without_human_review --status rejected --note "not reliable enough"
 
 # Apply / resolve a single item
 apply-review-item --root . --id <item-id>
