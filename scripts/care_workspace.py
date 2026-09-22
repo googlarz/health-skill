@@ -185,7 +185,18 @@ def humanize_name(value: str) -> str:
     return re.sub(r"[-_]+", " ", value).strip()
 
 
+def _reject_path_traversal(person_id: str) -> None:
+    """person_id is joined raw into every per-person path (profile, metrics DB,
+    exports, clinician packets). It must be a single path segment — reject
+    anything that could escape the workspace root (e.g. "../../etc")."""
+    if not person_id:
+        return
+    if person_id in (".", "..") or "/" in person_id or "\\" in person_id:
+        raise ValueError(f"invalid person_id: {person_id!r} (must be a single path segment)")
+
+
 def person_dir(root: Path, person_id: str) -> Path:
+    _reject_path_traversal(person_id)
     if not person_id:
         return root
     nested = root / "people" / person_id

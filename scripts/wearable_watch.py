@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import plistlib
 import subprocess
 import sys
 from pathlib import Path
@@ -20,8 +21,11 @@ PLIST_LABEL_PREFIX = "com.health-skill.wearable-sync"
 
 
 def _plist_label(person_id: str) -> str:
-    safe = person_id.replace(" ", "_").lower() if person_id else "default"
-    return f"{PLIST_LABEL_PREFIX}.{safe}"
+    # This becomes a filename component (_plist_path) — must not contain "/" or
+    # other characters that could create unintended paths or nested directories.
+    import re
+    safe = re.sub(r"[^a-z0-9_-]+", "_", person_id.lower()).strip("_") if person_id else "default"
+    return f"{PLIST_LABEL_PREFIX}.{safe or 'default'}"
 
 
 def _plist_path(person_id: str) -> Path:
@@ -52,40 +56,22 @@ def install_launchd_watcher(root: Path, person_id: str, interval_seconds: int = 
     if plist.exists():
         subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
 
-    plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>{label}</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>{python}</string>
-        <string>{script}</string>
-        <string>sync-wearable</string>
-        <string>--root</string>
-        <string>{root_abs}</string>
-        <string>--person-id</string>
-        <string>{person_id}</string>
-    </array>
-
-    <key>StartInterval</key>
-    <integer>{interval_seconds}</integer>
-
-    <key>RunAtLoad</key>
-    <true/>
-
-    <key>StandardOutPath</key>
-    <string>{stdout_log}</string>
-
-    <key>StandardErrorPath</key>
-    <string>{stderr_log}</string>
-</dict>
-</plist>
-"""
-    plist.write_text(plist_content, encoding="utf-8")
+    # Built via plistlib (not string formatting) so no value here — however a
+    # person_id or path is crafted — can inject additional plist keys/entries.
+    plist_dict = {
+        "Label": label,
+        "ProgramArguments": [
+            python, script, "sync-wearable",
+            "--root", root_abs,
+            "--person-id", person_id,
+        ],
+        "StartInterval": interval_seconds,
+        "RunAtLoad": True,
+        "StandardOutPath": stdout_log,
+        "StandardErrorPath": stderr_log,
+    }
+    with open(plist, "wb") as fh:
+        plistlib.dump(plist_dict, fh)
 
     result = subprocess.run(["launchctl", "load", str(plist)], capture_output=True, text=True)
     if result.returncode != 0:
