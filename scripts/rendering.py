@@ -153,19 +153,6 @@ def source_trust_label(source: dict[str, Any] | None) -> str:
     return base
 
 
-def source_trust_reason(source: dict[str, Any] | None) -> str:
-    source = source or {}
-    source_type = str(source.get("type") or "").strip().lower()
-    reasons = {
-        "document": "Based on a stored source file rather than memory alone.",
-        "document-extraction": "Pulled from a document automatically, so it still deserves a human check.",
-        "review-application": "Promoted into the record after explicit review.",
-        "user": "Comes from a direct user or caregiver report.",
-        "legacy": "Carried forward from older workspace data.",
-    }
-    return reasons.get(source_type, "The source is not clear enough yet.")
-
-
 def review_source_snippet(item: dict[str, Any]) -> str:
     snippet = str(item.get("source_snippet") or "").strip()
     if not snippet:

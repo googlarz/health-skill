@@ -372,22 +372,6 @@ def onboarding_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "ONBOARDING.md"
 
 
-def checkins_path(root: Path, person_id: str) -> Path:
-    return person_dir(root, person_id) / "DAILY_CHECKINS.md"
-
-
-def cycles_path(root: Path, person_id: str) -> Path:
-    return person_dir(root, person_id) / "CYCLES.md"
-
-
-def training_path(root: Path, person_id: str) -> Path:
-    return person_dir(root, person_id) / "TRAINING.md"
-
-
-def workout_plan_path(root: Path, person_id: str, plan_name: str) -> Path:
-    return person_dir(root, person_id) / f"WORKOUT_PLAN_{slugify(plan_name).upper()}.md"
-
-
 def screenings_path(root: Path, person_id: str) -> Path:
     return person_dir(root, person_id) / "PREVENTIVE_CARE.md"
 
@@ -1026,14 +1010,6 @@ def ensure_metrics_db(root: Path, person_id: str) -> sqlite3.Connection:
             pass  # column already exists
     connection.commit()
     return connection
-
-
-def open_metrics_db(root: Path, person_id: str) -> sqlite3.Connection | None:
-    """Read-only DB open — skips CREATE TABLE overhead (#2)."""
-    path = metrics_db_path(root, person_id)
-    if not path.exists():
-        return None
-    return sqlite3.connect(path)
 
 
 def file_content_hash(path: Path) -> str:

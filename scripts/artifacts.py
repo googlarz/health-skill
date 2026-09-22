@@ -939,13 +939,3 @@ def statistics_mean(values: list[float]) -> float:
     return sum(values) / len(values)
 
 
-def generate_longevity_dashboard_artifact(root: Path, person_id: str) -> Path:
-    """Generate LONGEVITY.html — the comprehensive longevity dashboard."""
-    try:
-        from .care_workspace import longevity_dashboard_path
-    except ImportError:
-        from care_workspace import longevity_dashboard_path  # type: ignore
-    html_text = build_longevity_dashboard_html(root, person_id)
-    output = longevity_dashboard_path(root, person_id)
-    atomic_write_text(output, html_text)
-    return output

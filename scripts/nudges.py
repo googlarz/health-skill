@@ -145,24 +145,6 @@ def compute_nudges(root: Path, person_id: str) -> list[dict[str, Any]]:
     return nudges
 
 
-def _vitals_streak(
-    vitals: list[dict[str, Any]], metric: str, days: int
-) -> list[float]:
-    """Return the last `days` daily values for a vital metric, most recent last."""
-    cutoff = date.today() - timedelta(days=days)
-    by_day: dict[str, float] = {}
-    for v in vitals:
-        if v.get("metric") != metric:
-            continue
-        d = _parse_date(v.get("date", ""))
-        if d and d >= cutoff:
-            try:
-                by_day[d.isoformat()] = float(v.get("value", 0))
-            except (TypeError, ValueError):
-                pass
-    return [by_day[k] for k in sorted(by_day)]
-
-
 def _pattern_alerts(
     p: dict[str, Any],
     today: date,

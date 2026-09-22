@@ -236,56 +236,6 @@ def predict_next_period(cycles: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def render_cycles_text(profile: dict[str, Any]) -> str:
-    """Render CYCLES.md with recent cycles, prediction, and patterns."""
-    prefs = profile.get("preferences", {}) or {}
-    cycles = list(profile.get("cycles", []) or [])
-    lines = ["# Cycles", "", f"> PRIVACY: {PRIVACY_NOTE}", ""]
-    if not prefs.get("track_cycles"):
-        lines.append("_Cycle tracking is not enabled in preferences._")
-        lines.append("")
-        return "\n".join(lines)
-    if not cycles:
-        lines.append("_No cycles recorded yet._")
-        lines.append("")
-        return "\n".join(lines)
-
-    cycles_sorted = sorted(cycles, key=lambda c: c.get("start_date", ""), reverse=True)
-    prediction = predict_next_period(cycles)
-
-    lines.append("## Prediction")
-    if prediction["predicted_start"]:
-        lines.append(
-            f"- Next period: **{prediction['predicted_start']}** "
-            f"(avg cycle {prediction['avg_cycle_length']} days, confidence: {prediction['confidence']})"
-        )
-    else:
-        lines.append("- Not enough data for a prediction yet.")
-    lines.append("")
-
-    lines.append("## Recent cycles")
-    for c in cycles_sorted[:6]:
-        start = c.get("start_date", "?")
-        end = c.get("end_date") or "ongoing"
-        length = c.get("length_days")
-        flow = c.get("flow") or "-"
-        syms = ", ".join(c.get("symptoms", []) or []) or "-"
-        length_str = f"{length}d" if length else "-"
-        lines.append(f"- {start} → {end} | length {length_str} | flow {flow} | symptoms: {syms}")
-    lines.append("")
-
-    # Patterns: most common symptoms
-    sym_count: dict[str, int] = {}
-    for c in cycles:
-        for s in c.get("symptoms", []) or []:
-            sym_count[s] = sym_count.get(s, 0) + 1
-    if sym_count:
-        top = sorted(sym_count.items(), key=lambda x: x[1], reverse=True)[:5]
-        lines.append("## Patterns")
-        for sym, n in top:
-            lines.append(f"- {sym}: {n} cycle(s)")
-        lines.append("")
-    return "\n".join(lines)
 
 
 def command_cycle_log(args: argparse.Namespace) -> int:

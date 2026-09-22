@@ -223,17 +223,6 @@ def _indeterminate(gene: str, reason: str = "missing") -> dict[str, str]:
 # Output: phenotype string
 # ---------------------------------------------------------------------------
 
-def _count_risk_alleles(gene_variants: list[tuple[str, str]]) -> int:
-    """Count total risk alleles across all variants for a gene."""
-    count = 0
-    for rsid, genotype in gene_variants:
-        if rsid not in SNP_DB:
-            continue
-        risk = SNP_DB[rsid]["risk_allele"]
-        count += genotype.count(risk)
-    return count
-
-
 def _call_cyp2c19(variants: dict[str, str]) -> dict[str, str]:
     """Call CYP2C19 metaboliser status."""
     lof_rsids = ["rs4244285", "rs4986893"]  # *2, *3

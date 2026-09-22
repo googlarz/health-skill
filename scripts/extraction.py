@@ -139,10 +139,6 @@ def is_in_inbox(root: Path, person_id: str, source_path: Path) -> bool:
         return False
 
 
-def supported_text_document(path: Path) -> bool:
-    return path.suffix.lower() in {".md", ".txt", ".json", ".pdf"}
-
-
 def read_document_text_with_mode(path: Path, page_limit: int = 10) -> tuple[str, str]:
     suffix = path.suffix.lower()
     if suffix in {".md", ".txt", ".json"}:

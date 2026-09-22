@@ -510,57 +510,6 @@ def generate_workout_plan(
     return plan
 
 
-def render_training_text(profile: dict[str, Any]) -> str:
-    """Render TRAINING.md with recent workouts, PRs, and current plan."""
-    workouts = list(profile.get("workouts", []) or [])
-    prs = list(profile.get("personal_records", []) or [])
-    plans = list(profile.get("workout_plans", []) or [])
-
-    lines = ["# Training", ""]
-
-    if plans:
-        current = plans[-1]
-        lines.append("## Current plan")
-        lines.append(f"- **{current.get('name','?')}** — {current.get('sessions_per_week','?')}x/week, "
-                     f"{current.get('duration_weeks','?')} weeks")
-        lines.append(f"- Goal: {current.get('goal','-')}")
-        if current.get("progression"):
-            lines.append(f"- Progression: {current['progression']}")
-        lines.append("")
-
-    lines.append("## Recent workouts")
-    if workouts:
-        workouts_sorted = sorted(workouts, key=lambda w: w.get("date", ""), reverse=True)
-        for w in workouts_sorted[:10]:
-            d = w.get("date", "?")
-            typ = w.get("type", "workout")
-            dur = w.get("duration_min")
-            dist = w.get("distance_km")
-            parts = [d, typ]
-            if dur: parts.append(f"{dur}min")
-            if dist: parts.append(f"{dist}km")
-            ex_count = len(w.get("exercises", []) or [])
-            if ex_count:
-                parts.append(f"{ex_count} exercises")
-            lines.append(f"- {' | '.join(str(p) for p in parts)}")
-    else:
-        lines.append("_No workouts logged yet._")
-    lines.append("")
-
-    lines.append("## Personal records")
-    if prs:
-        prs_sorted = sorted(prs, key=lambda p: p.get("date", ""), reverse=True)
-        for pr in prs_sorted[:10]:
-            lines.append(
-                f"- **{pr.get('exercise','?')}**: {pr.get('value','?')} {pr.get('unit','')} "
-                f"({pr.get('date','?')})"
-            )
-    else:
-        lines.append("_No PRs recorded yet._")
-    lines.append("")
-    lines.append(f"> {SAFETY_NOTE}")
-    lines.append("")
-    return "\n".join(lines)
 
 
 def command_workout_log(args: argparse.Namespace) -> int:

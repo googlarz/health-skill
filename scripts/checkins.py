@@ -250,50 +250,6 @@ def save_checkin(root: Path, person_id: str, parsed: dict[str, Any]) -> dict[str
     return candidate
 
 
-def render_checkins_text(profile: dict[str, Any]) -> str:
-    """Render recent daily check-ins as markdown."""
-    checkins = list(profile.get("daily_checkins", []) or [])
-    if not checkins:
-        return "# Daily Check-ins\n\n_No check-ins recorded yet._\n"
-    checkins.sort(key=lambda c: c.get("date", ""), reverse=True)
-    recent = checkins[:14]
-
-    lines = ["# Daily Check-ins", ""]
-    # Mini-trends
-    moods = [c.get("mood") for c in recent if isinstance(c.get("mood"), (int, float))]
-    sleeps = [c.get("sleep_hours") for c in recent if isinstance(c.get("sleep_hours"), (int, float))]
-    energies = [c.get("energy") for c in recent if isinstance(c.get("energy"), (int, float))]
-    lines.append("## Recent trends (last 14 entries)")
-    if moods:
-        lines.append(f"- Mood avg: {sum(moods)/len(moods):.1f} (n={len(moods)})")
-    if sleeps:
-        lines.append(f"- Sleep avg: {sum(sleeps)/len(sleeps):.1f}h (n={len(sleeps)})")
-    if energies:
-        lines.append(f"- Energy avg: {sum(energies)/len(energies):.1f} (n={len(energies)})")
-    lines.append("")
-    lines.append("## Entries")
-    for c in recent:
-        parts = [f"**{c.get('date','?')}**"]
-        if c.get("mood") is not None:
-            parts.append(f"mood {c['mood']}")
-        if c.get("sleep_hours") is not None:
-            parts.append(f"sleep {c['sleep_hours']}h")
-        if c.get("energy") is not None:
-            parts.append(f"energy {c['energy']}")
-        if c.get("stress") is not None:
-            parts.append(f"stress {c['stress']}")
-        if c.get("pain_locations"):
-            locs = ",".join(c["pain_locations"])
-            sev = c.get("pain_severity")
-            parts.append(f"pain {locs}" + (f" {sev}/10" if sev is not None else ""))
-        if c.get("weight_kg") is not None:
-            parts.append(f"weight {c['weight_kg']}kg")
-        line = " | ".join(parts)
-        if c.get("notes"):
-            line += f" -- {c['notes']}"
-        lines.append(f"- {line}")
-    lines.append("")
-    return "\n".join(lines)
 
 
 def command_daily_checkin(args: argparse.Namespace) -> int:
