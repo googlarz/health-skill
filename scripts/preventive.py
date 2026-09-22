@@ -7,7 +7,7 @@ Computes which age-/sex-appropriate screenings are due based on profile data.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +17,7 @@ try:
         calculate_age_from_dob,
         load_profile,
         now_utc,
+        parse_date,
         save_profile,
         screenings_path,
         workspace_lock,
@@ -27,6 +28,7 @@ except ImportError:
         calculate_age_from_dob,
         load_profile,
         now_utc,
+        parse_date,
         save_profile,
         screenings_path,
         workspace_lock,
@@ -59,15 +61,7 @@ RECOMMENDED_SCREENINGS: dict[str, dict[str, Any]] = {
 }
 
 
-def _parse_date(s: str) -> date | None:
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
-        try:
-            return datetime.strptime(s.strip(), fmt).date()
-        except ValueError:
-            continue
-    return None
+_parse_date = parse_date  # shared implementation in care_workspace.py
 
 
 def _add_years(d: date, years: float) -> date:

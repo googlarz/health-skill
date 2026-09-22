@@ -172,6 +172,26 @@ def resolve_root(args: argparse.Namespace) -> Path:
     return p
 
 
+def parse_date(s: Any) -> date | None:
+    """Parse a date string tolerantly. Accepts YYYY-MM-DD, YYYY/MM/DD, MM/DD/YYYY,
+    and ISO datetime strings (truncated to the date portion).
+
+    Shared by every module that reads profile dates (connections.py, goals.py,
+    forecasting.py, nudges.py, greeting.py, preventive.py, recap.py all used to
+    define their own copy — two of the seven had already drifted to accept more
+    formats than the other five).
+    """
+    if not s:
+        return None
+    text = str(s).strip()[:10]
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 

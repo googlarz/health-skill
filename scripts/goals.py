@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import statistics
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ try:
         goals_path,
         load_profile,
         load_snapshot,
+        parse_date,
         save_profile,
         workspace_lock,
     )
@@ -31,6 +32,7 @@ except ImportError:
         goals_path,
         load_profile,
         load_snapshot,
+        parse_date,
         save_profile,
         workspace_lock,
     )
@@ -52,11 +54,7 @@ METRICS = {
 }
 
 
-def _parse_date(s: str) -> date | None:
-    try:
-        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
+_parse_date = parse_date  # shared implementation in care_workspace.py
 
 
 def _next_id(goals: list[dict[str, Any]]) -> str:

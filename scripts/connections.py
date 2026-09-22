@@ -13,7 +13,7 @@ Design principles:
 from __future__ import annotations
 
 import statistics
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -22,27 +22,21 @@ try:
         load_profile,
         load_vital_entries,
         load_weight_entries,
+        parse_date,
     )
 except ImportError:
     from care_workspace import (
         load_profile,
         load_vital_entries,
         load_weight_entries,
+        parse_date,
     )
 
 
 MIN_DATA_POINTS = 5
 
 
-def _parse_date(s: str) -> date | None:
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(str(s).strip()[:10], fmt).date()
-        except ValueError:
-            continue
-    return None
+_parse_date = parse_date  # shared implementation in care_workspace.py
 
 
 def _days_ago(d: date, reference: date) -> int:

@@ -8,7 +8,7 @@ weight, vitals, new documents, and one-line "what to action next".
 from __future__ import annotations
 
 import statistics
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,21 +16,19 @@ try:
     from .care_workspace import (
         atomic_write_text,
         load_snapshot,
+        parse_date,
         recap_path,
     )
 except ImportError:
     from care_workspace import (  # type: ignore
         atomic_write_text,
         load_snapshot,
+        parse_date,
         recap_path,
     )
 
 
-def _parse_date(s: str) -> date | None:
-    try:
-        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
+_parse_date = parse_date  # shared implementation in care_workspace.py
 
 
 def _mean(values: list[float]) -> float | None:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +21,14 @@ try:
         atomic_write_text,
         forecast_path,
         load_snapshot,
+        parse_date,
     )
 except ImportError:
     from care_workspace import (  # type: ignore
         atomic_write_text,
         forecast_path,
         load_snapshot,
+        parse_date,
     )
 
 
@@ -35,11 +37,7 @@ KEY_LAB_MARKERS = ["LDL", "HDL", "A1C", "TSH", "Total Cholesterol",
                    "Triglycerides", "Vitamin D", "Glucose", "Creatinine", "ALT"]
 
 
-def _parse_date(s: str) -> date | None:
-    try:
-        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
+_parse_date = parse_date  # shared implementation in care_workspace.py
 
 
 def _linear_regression(xs: list[float], ys: list[float]) -> dict[str, float]:

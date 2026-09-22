@@ -6,27 +6,23 @@ to be spoken by Claude at the start of a health conversation.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 try:
-    from .care_workspace import load_profile, load_vital_entries
+    from .care_workspace import load_profile, load_vital_entries, parse_date
     from .nudges import compute_nudges
     from .interactions import check_interactions
     from .appointments import get_upcoming_appointments
 except ImportError:
-    from care_workspace import load_profile, load_vital_entries  # type: ignore
+    from care_workspace import load_profile, load_vital_entries, parse_date  # type: ignore
     from nudges import compute_nudges  # type: ignore
     from interactions import check_interactions  # type: ignore
     from appointments import get_upcoming_appointments  # type: ignore
 
 
-def _parse_date(s: str) -> date | None:
-    try:
-        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
+_parse_date = parse_date  # shared implementation in care_workspace.py
 
 
 def _days_ago(d: date) -> int:
