@@ -796,12 +796,15 @@ def import_pgx_file(root: Path, person_id: str, pgx_path: Path) -> dict[str, Any
         medications = profile.get("medications") or []
         alerts = pgx_drug_alerts(phenotypes, medications)
 
-        # Store PGx results in profile
+        # Store PGx results in profile. Keep the FULL per-gene dict (phenotype +
+        # label + implication) — render_pgx_report()/pgx_drug_alerts() both
+        # expect this shape, so flattening to just the phenotype string here
+        # (as a prior version did) breaks report regeneration (pgx-report)
+        # with an AttributeError the moment it re-reads the saved data.
         profile["pharmacogenomics"] = {
             "source_file": pgx_path.name,
             "variants_analysed": len(variants),
-            "phenotypes": {gene: p["phenotype"] for gene, p in phenotypes.items()},
-            "phenotype_labels": {gene: p["label"] for gene, p in phenotypes.items()},
+            "phenotypes": phenotypes,
             "alerts_count": len(alerts),
         }
         save_profile(root, person_id, profile)

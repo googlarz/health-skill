@@ -99,7 +99,7 @@ try:
     from .fhir_import import import_fhir_file
     from .mental_health import write_mental_health_report
     from .lab_ranges import render_range_context, personalised_range, flag_lab_value
-    from .pharmacogenomics import import_pgx_file, render_pgx_report as build_pgx_report
+    from .pharmacogenomics import import_pgx_file, pgx_report_path, render_pgx_report as build_pgx_report
     from .appointments import (
         build_pre_visit_brief,
         get_upcoming_appointments,
@@ -234,7 +234,7 @@ except ImportError:
     from fhir_import import import_fhir_file  # type: ignore
     from mental_health import write_mental_health_report  # type: ignore
     from lab_ranges import render_range_context, personalised_range, flag_lab_value  # type: ignore
-    from pharmacogenomics import import_pgx_file, render_pgx_report as build_pgx_report  # type: ignore
+    from pharmacogenomics import import_pgx_file, pgx_report_path, render_pgx_report as build_pgx_report  # type: ignore
     from appointments import (  # type: ignore
         build_pre_visit_brief,
         get_upcoming_appointments,
@@ -1767,7 +1767,7 @@ def build_parser() -> argparse.ArgumentParser:
     pgx_parser.set_defaults(func=_command_import_pgx)
 
     pgx_report_parser = subparsers.add_parser(
-        "pgx-report", help="Generate pharmacogenomics report (PGX_REPORT.md)")
+        "pgx-report", help="Generate pharmacogenomics report (PHARMACOGENOMICS.md)")
     pgx_report_parser.add_argument("--root", default=None)
     pgx_report_parser.add_argument("--person-id", default="")
     pgx_report_parser.set_defaults(func=_command_pgx_report)
@@ -2434,7 +2434,11 @@ def _command_pgx_report(args: argparse.Namespace) -> int:
     alerts = pgx_drug_alerts(phenotypes, profile.get("medications", []))
     variants_found = pgx_data.get("variants_found", 0)
     text = build_pgx_report(phenotypes, alerts, variants_found=variants_found)
-    out_path = Path(root) / (args.person_id or "") / "PGX_REPORT.md"
+    # Must match import_pgx_file()'s own write path (pgx_report_path) — a
+    # hand-rolled path here previously wrote a second, differently-named file
+    # ("PGX_REPORT.md" vs the canonical "PHARMACOGENOMICS.md") to the wrong
+    # directory under the root/people/<id>/ workspace layout.
+    out_path = pgx_report_path(root, args.person_id)
     atomic_write_text(out_path, text)
     print(f"PGX report written: {out_path}")
     return 0
