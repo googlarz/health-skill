@@ -158,6 +158,7 @@ For most requests, use this sequence:
 - Use `HEALTH_HOME.md` as the single best reopening point when the user wants one calm home screen.
 - Keep provenance on structured entries with source type, label, and date.
 - Surface source disagreements in `HEALTH_CONFLICTS.json` instead of silently hiding them.
+- Before generating any report or dashboard, run `process-inbox` and check `list-conflicts` first — don't report from a stale record when newer source files or unresolved conflicts are sitting there.
 - Put extracted-but-not-fully-verified facts into `HEALTH_REVIEW_QUEUE.json`.
 - Keep `REVIEW_WORKLIST.md` human-friendly so the user can understand the queue without reading JSON.
 - Store longitudinal weight entries in `health_metrics.db` and regenerate `WEIGHT_TRENDS.md`.
