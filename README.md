@@ -5,9 +5,9 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/tests-353%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-403%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-    <img src="https://img.shields.io/badge/version-2.4.1-purple" alt="v2.4.1">
+    <img src="https://img.shields.io/badge/version-2.4.2-purple" alt="v2.4.2">
   </p>
 </p>
 
@@ -399,6 +399,14 @@ about the same?
 
 ## Recent Releases
 
+### v2.4.2 — Community fixes, security hardening, architecture cleanup
+- Merged 2 community pull requests: dual workspace-layout support (`root/people/<id>/` and sibling-project layouts now both work everywhere), and family-history cascade for conditions recorded in Chinese
+- **Security**: fixed a path-traversal bug in `person_id` handling and a plist XML-injection bug in `setup-watch` (both verified against the actual exploit payload)
+- **Architecture**: consolidated 8 duplicate date-parsing functions and 9 duplicate `pain`/`sleep` check-in accessors into shared helpers — the exact bug class from v2.4.1 can no longer recur one file at a time; removed 20+ confirmed-dead functions and an entire unused module
+- **More bugs closed**: `pgx-report` crashed on every regeneration since v2.4.1; the HTML dashboard's weight and lab charts were permanently empty (wrong data source) and silently dropped `pain=0` as a chart gap; an ambiguous "abnormal" lab flag silently dropped low-only markers (HDL, Vitamin D)
+- Fixed CI (was red for 4 commits — a security test wrote to the real `~/Library/LaunchAgents`, macOS-only, breaking the Linux runner)
+- 50 new regression tests — **403 total, all passing**
+
 ### v2.4.1 — 33-bug correctness sweep
 - Five adversarial review agents swept all 21k lines; every finding verified against writers/callers before fixing
 - **Resurrected silently-dead features**: appointments, meal log, PGX import, and post-visit history were all destroyed on every save by a schema-whitelist gap
@@ -472,7 +480,7 @@ See [references/safety-protocol.md](references/safety-protocol.md) for the full 
 ## Tests
 
 ```bash
-python3 -m pytest tests/ -q   # 353 tests, ~3s
+python3 -m pytest tests/ -q   # 403 tests, ~3s
 ```
 
 ## License
